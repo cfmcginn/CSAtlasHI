@@ -51,6 +51,8 @@ int makeClusterHist(std::string inFileName)
     return 1;
   }
 
+  const std::string caloTrkStr = tnamedMap["caloTrackStr"];
+  
   const bool doATLAS = std::stoi(tnamedMap["doATLAS"]);
   const bool doTruth = std::stoi(tnamedMap["doTruth"]);
   
@@ -74,9 +76,9 @@ int makeClusterHist(std::string inFileName)
   while(outFileName.find("/") != std::string::npos){outFileName.replace(0, outFileName.find("/")+1, "");}
   outFileName = "output/" + dateStr + "/" + outFileName + "_HIST_" + dateStr + ".root";
   
-  const Int_t nCentBins = 6;
-  const Int_t centBinsLow[nCentBins] = {0, 10, 20, 30, 40, 50};
-  const Int_t centBinsHigh[nCentBins] = {10, 20, 30, 40, 50, 60};
+  const Int_t nCentBins = 5;
+  const Int_t centBinsLow[nCentBins] = {0, 10, 20, 30, 40};
+  const Int_t centBinsHigh[nCentBins] = {10, 20, 30, 40, 60};
   Int_t nEventPerCent[nCentBins];
   std::vector<std::string> centBinsStr;
   for(Int_t cI = 0; cI < nCentBins; ++cI){
@@ -86,17 +88,24 @@ int makeClusterHist(std::string inFileName)
 
   const Float_t maxJtAbsEta = 3.0;
   
-  const Int_t nJtPtBins = 8;
-  const Float_t jtPtLow = 30;
-  const Float_t jtPtHigh = 120;
+  const Int_t nJtPtBins = 5;
+  Float_t jtPtLow = 60;
+  Float_t jtPtHigh = 200;
+  if(isStrSame(caloTrkStr, "trk")){
+    jtPtLow *= 0.7;
+    jtPtHigh *= 0.7;
+  }
   Double_t jtPtBins[nJtPtBins+1];
   getLogBins(jtPtLow, jtPtHigh, nJtPtBins, jtPtBins);
-    
+  std::vector<std::string> jtPtBinsStrVect;
+  
   TFile* outFile_p = new TFile(outFileName.c_str(), "RECREATE");
   TH1D* spectra_p[nMaxJtAlgo+2][nCentBins];
   TH1D* matchedATLASSpectra_p[nMaxJtAlgo][nCentBins];
   TH1D* matchedTruthSpectra_p[nMaxJtAlgo][nCentBins];
   TH1D* recoOverGen_VPt_p[nMaxJtAlgo][nCentBins][nJtPtBins];
+  TH1D* recoGen_DeltaEta_p[nMaxJtAlgo][nCentBins][nJtPtBins];
+  TH1D* recoGen_DeltaPhi_p[nMaxJtAlgo][nCentBins][nJtPtBins];
   
   for(Int_t jI = 0; jI < nJtAlgo+2; ++jI){
     std::string algo = "Truth";
@@ -114,8 +123,12 @@ int makeClusterHist(std::string inFileName)
       if(doTruth){
 	for(Int_t jI2 = 0; jI2 < nJtPtBins; ++jI2){
 	  std::string ptStr = "JtPt" + prettyString(jtPtBins[jI2], 1, true) + "to" + prettyString(jtPtBins[jI2+1], 1, true);
-	  recoOverGen_VPt_p[jI][cI][jI2] = new TH1D(("recoOverGen_VPt_" + nameStr + "_" + ptStr + "_h").c_str(), ";Reco./Gen.;Counts", 51, 0.0, 2.0);
-	  centerTitles(recoOverGen_VPt_p[jI][cI][jI2]);
+	  jtPtBinsStrVect.push_back(ptStr);
+	  recoOverGen_VPt_p[jI][cI][jI2] = new TH1D(("recoOverGen_VPt_" + nameStr + "_" + ptStr + "_h").c_str(), ";Reco./Gen.;Counts", 21, 0.0, 2.0);
+	  recoGen_DeltaEta_p[jI][cI][jI2] = new TH1D(("recoGen_DeltaEta_" + nameStr + "_" + ptStr + "_h").c_str(), ";#eta_{Reco.} - #eta_{Gen.};Counts", 21, -0.3, 0.3);
+	  recoGen_DeltaPhi_p[jI][cI][jI2] = new TH1D(("recoGen_DeltaPhi_" + nameStr + "_" + ptStr + "_h").c_str(), ";#phi_{Reco.} - #phi_{Gen.};Counts", 21, -0.3, 0.3);
+
+	  centerTitles({recoOverGen_VPt_p[jI][cI][jI2], recoGen_DeltaEta_p[jI][cI][jI2], recoGen_DeltaPhi_p[jI][cI][jI2]});
 	}
       }
       
@@ -127,9 +140,9 @@ int makeClusterHist(std::string inFileName)
 	}
 	centerTitles(matchedATLASSpectra_p[jI][cI]);
       }
-      
+     
       centerTitles(spectra_p[jI][cI]);
-    }  
+    }
   }
 
   Float_t cent_;
@@ -149,6 +162,7 @@ int makeClusterHist(std::string inFileName)
 
   Int_t njtTruth_;
   Float_t jtptTruth_[nMaxJets];
+  Float_t jtchgptTruth_[nMaxJets];
   Float_t jtetaTruth_[nMaxJets];
   Float_t jtphiTruth_[nMaxJets];
 
@@ -182,6 +196,7 @@ int makeClusterHist(std::string inFileName)
   csTree_p->SetBranchStatus("jtphiATLAS", 1);
   csTree_p->SetBranchStatus("njtTruth", 1);
   csTree_p->SetBranchStatus("jtptTruth", 1);
+  csTree_p->SetBranchStatus("jtchgptTruth", 1);
   csTree_p->SetBranchStatus("jtetaTruth", 1);
   csTree_p->SetBranchStatus("jtphiTruth", 1);
   
@@ -191,6 +206,7 @@ int makeClusterHist(std::string inFileName)
   csTree_p->SetBranchAddress("jtphiATLAS", jtphiATLAS_);
   csTree_p->SetBranchAddress("njtTruth", &njtTruth_);
   csTree_p->SetBranchAddress("jtptTruth", jtptTruth_);
+  csTree_p->SetBranchAddress("jtchgptTruth", jtchgptTruth_);
   csTree_p->SetBranchAddress("jtetaTruth", jtetaTruth_);
   csTree_p->SetBranchAddress("jtphiTruth", jtphiTruth_);
 
@@ -249,6 +265,12 @@ int makeClusterHist(std::string inFileName)
       }
 
       if(doTruth){
+	if(isStrSame(caloTrkStr, "trk")){
+	  for(Int_t jI = 0; jI < njtTruth_; ++jI){
+	    jtptTruth_[jI] = jtchgptTruth_[jI];
+	  }
+	}
+
 	for(Int_t jI = 0; jI < njtTruth_; ++jI){
 	  if(TMath::Abs(jtetaTruth_[jI]) > maxJtAbsEta) continue;
 	  if(jtptTruth_[jI] < jtPtLow) continue;
@@ -272,6 +294,8 @@ int makeClusterHist(std::string inFileName)
 	      if(truthmatchpos_[aI][jI2] == jI){
 		matchedTruthSpectra_p[aI][centPos]->Fill(jtpt_[aI][jI2]);
 		recoOverGen_VPt_p[aI][centPos][jtPos]->Fill(jtpt_[aI][jI2]/jtptTruth_[jI]);
+		recoGen_DeltaEta_p[aI][centPos][jtPos]->Fill(jteta_[aI][jI2] - jtetaTruth_[jI]);
+		recoGen_DeltaPhi_p[aI][centPos][jtPos]->Fill(jtphi_[aI][jI2] - jtphiTruth_[jI]);
 		isFilled = true;
 		break;
 	      }
@@ -311,6 +335,12 @@ int makeClusterHist(std::string inFileName)
 	    for(Int_t jI = 0; jI < nJtPtBins; ++jI){
 	      recoOverGen_VPt_p[aI][cI][jI]->Write("", TObject::kOverwrite);
 	      delete recoOverGen_VPt_p[aI][cI][jI];
+
+	      recoGen_DeltaEta_p[aI][cI][jI]->Write("", TObject::kOverwrite);
+	      delete recoGen_DeltaEta_p[aI][cI][jI];
+
+	      recoGen_DeltaPhi_p[aI][cI][jI]->Write("", TObject::kOverwrite);
+	      delete recoGen_DeltaPhi_p[aI][cI][jI];
 	    }
 	  }
 	}
@@ -322,8 +352,10 @@ int makeClusterHist(std::string inFileName)
   params_p->cd();
 
   std::string jtPtBinsStr = "";
+  std::string jtPtBinsStr2 = "";
   for(Int_t jI = 0; jI < nJtPtBins+1; ++jI){
-    jtPtBinsStr = jtPtBinsStr + prettyString(jtPtBins[jI], false, 1) + ",";
+    jtPtBinsStr = jtPtBinsStr + prettyString(jtPtBins[jI], 1, false) + ",";
+    if(jI != nJtPtBins) jtPtBinsStr2 = jtPtBinsStr2 + jtPtBinsStrVect[jI] + ",";
   }
   
   std::string centBinsLowStr = "";
@@ -348,6 +380,7 @@ int makeClusterHist(std::string inFileName)
   std::map<std::string, std::string> paramMap;
   paramMap["nJtPtBins"] = std::to_string(nJtPtBins);
   paramMap["jtPtBins"] = jtPtBinsStr;
+  paramMap["jtPtBinsStr"] = jtPtBinsStr2;
 
   paramMap["nCentBins"] = std::to_string(nCentBins);
   paramMap["centBinsLow"] = centBinsLowStr;
@@ -355,11 +388,8 @@ int makeClusterHist(std::string inFileName)
   paramMap["centBinsStr"] = centBinsStr2;
   paramMap["nEventPerCent"] = nEventPerCentStr;
   paramMap["maxJtAbsEta"] = prettyString(maxJtAbsEta, 2, false);
-  
-  for(auto const & iter : tnamedMap){
-    paramMap[iter.first] = iter.second;
-  }
 
+  for(auto const & iter : tnamedMap){paramMap[iter.first] = iter.second;}
   paramMap["nJtAlgo"] = std::to_string(nJtAlgo);
   paramMap["jtAlgos"] = jtAlgos2;
 

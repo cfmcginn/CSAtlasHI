@@ -45,6 +45,17 @@ Double_t getMinGTZero(TH1* inHist_p)
   return min;
 }
 
+Double_t getMin(TH1* inHist_p)
+{
+  Double_t min = inHist_p->GetMaximum();
+
+  for(Int_t bIX = 0; bIX < inHist_p->GetNbinsX(); ++bIX){
+    if(inHist_p->GetBinContent(bIX+1) < min) min = inHist_p->GetBinContent(bIX+1);
+  }
+
+  return min;
+}
+
 Double_t getMax(TH1* inHist_p)
 {
   Double_t max = inHist_p->GetBinContent(1);
