@@ -8,7 +8,9 @@ endif
 INCLUDE=-I $(PWD)
 ROOT=`root-config --cflags --glibs`
 
-FASTJET=`$(FASTJETPATH)/bin/fastjet-config --cxxflags  --libs --plugins --runpath`
+FASTJETPATH=/usatlas/u/cfmcginn/Packages/FastJet/fastjet-install
+FASTJETCS=/usatlas/u/cfmcginn/Packages/FastJet/fjcontrib-1.042/ConstituentSubtractor
+FASTJET=`$(FASTJETPATH)/bin/fastjet-config --cxxflags  --libs --plugins`
 #FASTJET=-I/home/cfmcginn/Packages/FastJet/fastjet-install/include -Wl,-rpath,/home/cfmcginn/Packages/FastJet/fastjet-install/lib -lm -L/home/cfmcginn/Packages/FastJet/fastjet-install/lib -lfastjettools -lfastjet -lfastjetplugins -lsiscone_spherical -lsiscone
 FJCONTRIB=-lConstituentSubtractor  
 
@@ -32,8 +34,8 @@ mkdirPdf:
 bin/constituentTest.exe: src/constituentTest.C
 	$(CXX) $(CXXFLAGS) src/constituentTest.C $(ROOT) $(PYTHIA8) $(FASTJET) $(FJCONTRIB) $(INCLUDE) -o bin/constituentTest.exe
 
-bin/clusterToCS.exe: src/clusterToCS.C /home/cfmcginn/Packages/FastJet/fjcontrib-1.042/ConstituentSubtractor/ConstituentSubtractor.cc
-	$(CXX) $(CXXFLAGS) src/clusterToCS.C /home/cfmcginn/Packages/FastJet/fjcontrib-1.042/ConstituentSubtractor/ConstituentSubtractor.cc $(ROOT) $(FASTJET) $(FJCONTRIB) $(INCLUDE) -fopenmp -o bin/clusterToCS.exe
+bin/clusterToCS.exe: src/clusterToCS.C $(FASTJETCS)/ConstituentSubtractor.cc
+	$(CXX) $(CXXFLAGS) src/clusterToCS.C $(FASTJETCS)/ConstituentSubtractor.cc $(ROOT) $(FASTJET) $(FJCONTRIB) $(INCLUDE) -fopenmp -o bin/clusterToCS.exe
 
 bin/makeClusterHist.exe: src/makeClusterHist.C
 	$(CXX) $(CXXFLAGS) src/makeClusterHist.C $(ROOT) $(INCLUDE) -o bin/makeClusterHist.exe

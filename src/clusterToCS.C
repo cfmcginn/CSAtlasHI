@@ -5,6 +5,7 @@
 
 //OMP
 #include <omp.h>
+#include <thread>
 
 //ROOT
 #include "TDatime.h"
@@ -332,13 +333,15 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
   total.start();
   preLoop.start();
 
-  const Int_t nPara = 10;
-  cppWatch inCluster1[nPara];
-  cppWatch inCluster2[nPara];
-  cppWatch inCluster3[nPara];
-  cppWatch inCluster4[nPara];
-  cppWatch inCluster5[nPara];
-  cppWatch inCluster6[nPara];
+  int nthreads = std::thread::hardware_concurrency();
+  const Int_t nParaMax = 10;
+  const Int_t nPara = TMath::Min(nParaMax, TMath::Max(nthreads/2, 1));
+  cppWatch inCluster1[nParaMax];
+  cppWatch inCluster2[nParaMax];
+  cppWatch inCluster3[nParaMax];
+  cppWatch inCluster4[nParaMax];
+  cppWatch inCluster5[nParaMax];
+  cppWatch inCluster6[nParaMax];
   
   std::string outFileName = inFileName.substr(0, inFileName.find(".root"));
   while(outFileName.find("/") != std::string::npos){outFileName.replace(0, outFileName.find("/")+1, "");}
