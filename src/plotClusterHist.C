@@ -135,7 +135,7 @@ void plotResponseSet(std::map<std::string, std::string> params, std::vector<TH1*
     globalLabelStr2.replace(globalLabelStr2.find("to"), 2, "-");
     globalLabelStr2 = globalLabelStr2 + "%";
   }
-  label_p->DrawLatex(0.2, 0.93, globalLabelStr2.c_str());
+ label_p->DrawLatex(0.2, 0.93, globalLabelStr2.c_str());
   if(params["caloTrackStr"].find("calo") != std::string::npos) label_p->DrawLatex(0.2, 0.87, "Calo. jets");
   else label_p->DrawLatex(0.2, 0.87, "Track jets");
   
@@ -342,7 +342,7 @@ int plotClusterHist(std::string inFileName, std::string globalStr = "")
       canv_p->SetLeftMargin(0.16);
       canv_p->SetBottomMargin(0.14);
       
-      TLegend* leg_p = new TLegend(0.6, 0.75, 0.95, 0.98);
+      TLegend* leg_p = new TLegend(0.6, 0.25, 0.95, 0.48);
       leg_p->SetTextFont(43);
       leg_p->SetTextSize(16);
       leg_p->SetBorderSize(0);
@@ -370,10 +370,10 @@ int plotClusterHist(std::string inFileName, std::string globalStr = "")
       centLabel = "#bf{#color[" + std::to_string(kRed) + "]{" + centLabel + "}}";
       if(globalStr.size() != 0) centLabel = centLabel + "; #bf{" + globalStr + "}";
       
-      label_p->DrawLatex(0.24, 0.95, centLabel.c_str());
-      if(jtAbsEtaMaxStr.size() != 0) label_p->DrawLatex(0.24, 0.83, ("|#eta_{jet}| < " + jtAbsEtaMaxStr).c_str());
-      if(isStrSame(caloTrackStr, "calo")) label_p->DrawLatex(0.24, 0.89, "Calo. jets");
-      else if(isStrSame(caloTrackStr, "trk")) label_p->DrawLatex(0.24, 0.89, "Track jets");
+      label_p->DrawLatex(0.44, 0.45, centLabel.c_str());
+      if(jtAbsEtaMaxStr.size() != 0) label_p->DrawLatex(0.44, 0.33, ("|#eta_{jet}| < " + jtAbsEtaMaxStr).c_str());
+      if(isStrSame(caloTrackStr, "calo")) label_p->DrawLatex(0.44, 0.39, "Calo. jets");
+      else if(isStrSame(caloTrackStr, "trk")) label_p->DrawLatex(0.44, 0.39, "Track jets");
       
       gStyle->SetOptStat(0);      
       leg_p->Draw("SAME");
