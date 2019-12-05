@@ -87,7 +87,7 @@ int makeClusterHist(std::string inFileName)
     nEventPerCent[cI] = 0;
   }
 
-  const Float_t maxJtAbsEta = 3.0;
+  const Float_t maxJtAbsEta = 2.4;//std::stod(tnamedMap["maxJtAbsEta"]);
   
   const Int_t nJtPtBins = 5;
   Float_t jtPtLow = 60;

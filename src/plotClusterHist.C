@@ -199,6 +199,7 @@ int plotClusterHist(std::string inFileName, std::string globalStr = "")
   std::vector<std::string> centBinsStr = commaSepStringToVect(paramMap["centBinsStr"]);
   std::vector<std::string> nEventPerCentStr = commaSepStringToVect(paramMap["nEventPerCent"]);
   const std::string jtAbsEtaMaxStr = paramMap["maxJtAbsEta"];
+  const double minJtPt = 20.;//paramMap["minJtPt"];
   std::vector<Double_t> nEventPerCent;
   for(unsigned int cI = 0; cI < nEventPerCentStr.size(); ++cI){
     nEventPerCent.push_back(std::stod(nEventPerCentStr[cI]));
@@ -219,7 +220,9 @@ int plotClusterHist(std::string inFileName, std::string globalStr = "")
 
   TH1D* spectra_p[nMaxJtAlgo][nMaxCentBins];
   TH1D* spectraTruth_p[nMaxCentBins];
+
   TH1D* recoOverGen_VPt_p[nMaxJtAlgo][nCentBins][nMaxJtPtBins];
+  TF1* recoOverGenFit_p[nMaxJtAlgo][nCentBins][nMaxJtPtBins];
   TH1D* recoGen_DeltaEta_p[nMaxJtAlgo][nCentBins][nMaxJtPtBins];
   TH1D* recoGen_DeltaPhi_p[nMaxJtAlgo][nCentBins][nMaxJtPtBins];
   TH1D* matchedTruthSpectra_p[nMaxJtAlgo][nMaxCentBins];
@@ -433,13 +436,52 @@ int plotClusterHist(std::string inFileName, std::string globalStr = "")
 	for(Int_t jI2 = 0; jI2 < nJtPtBins; ++jI2){
 	//std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 	  centerTitles(recoOverGen_VPt_p[jI][cI][jI2]);
+
+	  //Pre-fit to define our fit range
+	  TF1* tempFit_p = new TF1("tempFit_p", "gaus", 0.0, 2.0);
+	  recoOverGen_VPt_p[jI][cI][jI2]->Fit(tempFit_p, "Q N M", "", 0.0, 2.0);
+	  Double_t mean = tempFit_p->GetParameter(1);
+	  Int_t binPos = recoOverGen_VPt_p[jI][cI][jI2]->FindBin(mean);
+	  Int_t iter = 1;
+	  double integral = 0.0;
+	  Double_t minVal = 0.0;
+	  Double_t maxVal = 2.0;
+
+	  Int_t minBin = TMath::Max(1, recoOverGen_VPt_p[jI][cI][jI2]->FindBin(minJtPt/jtPtBins[jI2]));
+	  Int_t maxBin = recoOverGen_VPt_p[jI][cI][jI2]->GetNbinsX()+1;
+
+	  while(integral < 0.95){       
+	    Int_t lowBin = TMath::Max(minBin, binPos - iter);
+	    Int_t highBin = TMath::Min(maxBin, binPos + iter);
+
+	    integral = recoOverGen_VPt_p[jI][cI][jI2]->Integral(lowBin, highBin)/recoOverGen_VPt_p[jI][cI][jI2]->Integral(minBin, maxBin);
+	    minVal = (recoOverGen_VPt_p[jI][cI][jI2]->GetBinCenter(lowBin)+recoOverGen_VPt_p[jI][cI][jI2]->GetBinLowEdge(lowBin))/2.;
+	    maxVal = (recoOverGen_VPt_p[jI][cI][jI2]->GetBinCenter(highBin)+recoOverGen_VPt_p[jI][cI][jI2]->GetBinLowEdge(highBin+1))/2.;	    
+	    
+	    ++iter;
+	  }
 	  
+	  delete tempFit_p;
+
+	  recoOverGenFit_p[jI][cI][jI2] = new TF1(("recoOverGenFit_" + nameStr + "_" + jtPtBinsStr[jI]).c_str(), "gaus", minVal, maxVal);
+	  recoOverGen_VPt_p[jI][cI][jI2]->Fit(recoOverGenFit_p[jI][cI][jI2], "Q N M", "", minVal, maxVal);
+	  
+	  mean = recoOverGenFit_p[jI][cI][jI2]->GetParameter(1);
+	  Double_t meanErr = recoOverGenFit_p[jI][cI][jI2]->GetParError(1);
+
+	  Double_t sigma = recoOverGenFit_p[jI][cI][jI2]->GetParameter(2);
+	  Double_t sigmaErr = recoOverGenFit_p[jI][cI][jI2]->GetParError(2);
+
+	  Double_t relErr = TMath::Sqrt(meanErr/mean + sigmaErr/sigma);
+	  Double_t sigmaOverMean = sigma/mean;
+	  Double_t sigmaOverMeanErr = sigmaOverMean*relErr;
+
 	  //std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 	  
-	  recoOverGenMean_p[jI][cI]->SetBinContent(jI2+1, recoOverGen_VPt_p[jI][cI][jI2]->GetMean());
-	  recoOverGenMean_p[jI][cI]->SetBinError(jI2+1, recoOverGen_VPt_p[jI][cI][jI2]->GetMeanError());
-	  recoOverGenSigma_p[jI][cI]->SetBinContent(jI2+1, recoOverGen_VPt_p[jI][cI][jI2]->GetStdDev());
-	  recoOverGenSigma_p[jI][cI]->SetBinError(jI2+1, recoOverGen_VPt_p[jI][cI][jI2]->GetStdDevError());
+	  recoOverGenMean_p[jI][cI]->SetBinContent(jI2+1, mean);
+	  recoOverGenMean_p[jI][cI]->SetBinError(jI2+1, meanErr);
+	  recoOverGenSigma_p[jI][cI]->SetBinContent(jI2+1, sigma);
+	  recoOverGenSigma_p[jI][cI]->SetBinError(jI2+1, sigmaErr);
 
 	  recoGenSigma_DeltaEta_p[jI][cI]->SetBinContent(jI2+1, recoGen_DeltaEta_p[jI][cI][jI2]->GetStdDev());
 	  recoGenSigma_DeltaEta_p[jI][cI]->SetBinError(jI2+1, recoGen_DeltaEta_p[jI][cI][jI2]->GetStdDevError());
@@ -447,8 +489,8 @@ int plotClusterHist(std::string inFileName, std::string globalStr = "")
 	  recoGenSigma_DeltaPhi_p[jI][cI]->SetBinContent(jI2+1, recoGen_DeltaPhi_p[jI][cI][jI2]->GetStdDev());
 	  recoGenSigma_DeltaPhi_p[jI][cI]->SetBinError(jI2+1, recoGen_DeltaPhi_p[jI][cI][jI2]->GetStdDevError());
 
-	  recoOverGenSigmaOverMean_p[jI][cI]->SetBinContent(jI2+1, recoOverGen_VPt_p[jI][cI][jI2]->GetStdDev()/recoOverGen_VPt_p[jI][cI][jI2]->GetMean());
-	  recoOverGenSigmaOverMean_p[jI][cI]->SetBinError(jI2+1, recoOverGen_VPt_p[jI][cI][jI2]->GetStdDevError()/recoOverGen_VPt_p[jI][cI][jI2]->GetMean());
+	  recoOverGenSigmaOverMean_p[jI][cI]->SetBinContent(jI2+1, sigmaOverMean);
+	  recoOverGenSigmaOverMean_p[jI][cI]->SetBinError(jI2+1, sigmaOverMeanErr);
 
 	  //std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 
@@ -463,7 +505,7 @@ int plotClusterHist(std::string inFileName, std::string globalStr = "")
 	  //std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 
 	  recoOverGen_VPt_p[jI][cI][jI2]->DrawCopy("HIST E1");
-
+	  recoOverGenFit_p[jI][cI][jI2]->DrawCopy("SAME");	  
 	
 	  std::string centLabel = centBinsStr[cI].substr(4, centBinsStr[cI].size()) + "%";
 	  centLabel.replace(centLabel.find("to"), 2, "-");
@@ -663,6 +705,10 @@ int plotClusterHist(std::string inFileName, std::string globalStr = "")
 
 	delete recoGenSigma_DeltaEta_p[jI][cI];
 	delete recoGenSigma_DeltaPhi_p[jI][cI];
+
+	for(Int_t jI2 = 0; jI2 < nJtPtBins; ++jI2){
+	  delete recoOverGenFit_p[jI][cI][jI2];
+	}
       }
     }
   }

@@ -33,6 +33,7 @@
 #include "include/checkMakeDir.h"
 #include "include/cppWatch.h"
 #include "include/etaPhiFunc.h"
+#include "include/plotUtilities.h"
 #include "include/stringUtil.h"
 
 //The rewrite of CS is in part a tool to help me understand better the internal workings
@@ -1239,6 +1240,11 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
   paramMap["caloTrackStr"] = caloTrackStr;
   paramMap["doATLAS"] = std::to_string(doATLASFile);
   paramMap["doTruth"] = std::to_string(doTruth);
+
+  paramMap["minJtPt"] = prettyString(minJtPt, 2, false);
+
+  if(doCalo) paramMap["maxJtAbsEta"] = prettyString(maxJtAbsEta, 2, false);
+  else paramMap["maxJtAbsEta"] = prettyString(maxTrkJtAbsEta, 2, false);
   
   for(auto const& iter : paramMap){
     TNamed tempName(iter.first.c_str(), iter.second.c_str());
