@@ -95,6 +95,8 @@ void rescaleGhosts(std::vector<float> rho_, std::vector<float> etaBins_, std::ve
     Double_t Pz = Et*std::sinh(ighost.eta());
 
     ighost.reset_momentum(Px, Py, Pz, E);
+
+    //    std::cout << "MASS: " << ighost.m() << std::endl;
   }
 
   return;
@@ -104,6 +106,11 @@ void rescaleGhosts(std::vector<float> rho_, std::vector<float> etaBins_, std::ve
 void getJetsFromParticles(std::vector<float> rho_, std::vector<float> etaBins_, std::vector<fastjet::PseudoJet> particles, std::map<std::string, std::vector<fastjet::PseudoJet> >* jets, std::vector<cppWatch*> cpp)
 {
   cpp[0]->start();
+
+  //  std::cout << "STARTING PARTICLES: " << std::endl;
+  //  for(unsigned int pI = 0; pI < particles.size(); ++pI){
+  //    std::cout << " " << pI << "/" << particles.size() << ": " << particles[pI].pt() << ", " << particles[pI].eta() << ", " << particles[pI].phi_std() << ", " << particles[pI].m() << std::endl;
+  //  }
   
   if(jets->count("NoSub") == 0){
     std::cout << "NoSub is missing from input jets collection. return" << std::endl;
@@ -148,6 +155,12 @@ void getJetsFromParticles(std::vector<float> rho_, std::vector<float> etaBins_, 
 
     const Int_t nRealConst = realConst.size();
     if(nRealConst == 0) continue;
+ 
+    //    std::cout << "PURE PARTICLES (pt, eta, phi, m): " << std::endl;
+    //    for(unsigned int aI = 0; aI < realConst.size(); ++aI){
+      //      std::cout << " " << aI << "/" << realConst.size() << ": " << realConst[aI].pt() << ", " << realConst[aI].eta() << ", " << realConst[aI].phi_std() << ", " << realConst[aI].m() << std::endl;
+    //      realConst[aI].set_user_index(aI);
+    //    }
 
     for(unsigned int aI = 0; aI < alphaParams.size(); ++aI){
       fastjet::contrib::ConstituentSubtractor subtractor;
@@ -158,8 +171,12 @@ void getJetsFromParticles(std::vector<float> rho_, std::vector<float> etaBins_, 
       subtractor.set_max_eta(maxGlobalAbsEta);
       subtractor.set_keep_original_masses();
       subtracted_particles = subtractor.do_subtraction(realConst, ghosts);
+   
+      //      std::cout << "SUBTRACTED PARTICLES (pt, eta, phi, m): " << std::endl;
 
       for(unsigned int pI = 0; pI < subtracted_particles.size(); ++pI){
+	//	std::cout << " " << subtracted_particles[pI].user_index() << ": " << subtracted_particles[pI].pt() << ", " << subtracted_particles[pI].eta() << ", " << subtracted_particles[pI].phi_std() << ", " << subtracted_particles[pI].m() << std::endl;
+
 	if(subtracted_particles[pI].pt() < 0.1) continue;	
 	subtracted_particles_clean.push_back(subtracted_particles[pI]);
       }
@@ -342,7 +359,7 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
   preLoop.start();
 
   int nthreads = std::thread::hardware_concurrency();
-  const Int_t nParaMax = 10;
+  const Int_t nParaMax = 4;
   const Int_t nPara = TMath::Min(nParaMax, TMath::Max(nthreads/2, 1));
   cppWatch inCluster1[nParaMax];
   cppWatch inCluster2[nParaMax];
@@ -375,9 +392,7 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
 
   std::vector<float>* etaBinsOut_p=new std::vector<float>;
   std::vector<float>* rhoOut_p=new std::vector<float>;
-  std::vector<float>* rhoCorrOut_p=new std::vector<float>;
-    
-  
+  std::vector<float>* rhoCorrOut_p=new std::vector<float>;  
 
   const Int_t nJtAlgo = 4;
   std::vector<std::string> jtAlgos = {"NoSub"};
@@ -644,7 +659,7 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
 
   //std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 
-  const Int_t nEntries = TMath::Min(10000, (Int_t)clusterTree_p->GetEntries());
+  const Int_t nEntries = TMath::Min(10000000, (Int_t)clusterTree_p->GetEntries());
   const Int_t nDiv = TMath::Max(1, nEntries/400);
 
   /*
@@ -762,6 +777,7 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
       }
       else{
 	tL.SetPtEtaPhiM(E, clusterEta_p->at(cI), clusterPhi_p->at(cI), 0.0);
+	E = tL.E();
 	Px = tL.Px();
 	Py = tL.Py();
 	Pz = tL.Pz();
