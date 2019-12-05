@@ -46,8 +46,9 @@ const double ghost_area = 0.01;
 const int active_area_repeats = 1;
 const fastjet::GhostedAreaSpec ghost_spec(maxGlobalAbsEta, active_area_repeats, ghost_area);
 const fastjet::AreaDefinition area_def = fastjet::AreaDefinition(fastjet::active_area_explicit_ghosts, ghost_spec);
-const Float_t minJtPt = 15.;
+const Float_t minJtPt = 20.;
 const Float_t maxJtAbsEta = 3.;
+const Float_t maxTrkJtAbsEta = 2.4;
 const Int_t nMaxJets = 500;
 const Float_t deltaEta = 0.1;
 
@@ -86,8 +87,14 @@ void rescaleGhosts(std::vector<float> rho_, std::vector<float> etaBins_, std::ve
 {
   for(fastjet::PseudoJet& ighost : (*ghosts)){
     int ghostPos = ghostEtaPos(etaBins_, ighost);
-    double pt = (rho_.at(ghostPos))*ighost.area();
-    ighost.reset_momentum_PtYPhiM(pt,ighost.rap(),ighost.phi(),ighost.m());
+    //    double pt = (rho_.at(ghostPos))*ighost.area();
+    double E = (rho_.at(ghostPos))*ighost.area();
+    Double_t Et = E/std::cosh(ighost.eta());
+    Double_t Px = Et*std::cos(ighost.phi_std());
+    Double_t Py = Et*std::sin(ighost.phi_std());
+    Double_t Pz = Et*std::sinh(ighost.eta());
+
+    ighost.reset_momentum(Px, Py, Pz, E);
   }
 
   return;
@@ -108,7 +115,7 @@ void getJetsFromParticles(std::vector<float> rho_, std::vector<float> etaBins_, 
   }
 
   fastjet::ClusterSequenceArea csA(particles, jet_def, area_def);  
-  ((*jets)["NoSub"]) = fastjet::sorted_by_pt(csA.inclusive_jets(5.));
+  ((*jets)["NoSub"]) = fastjet::sorted_by_pt(csA.inclusive_jets(minJtPt));
 
   std::vector<fastjet::PseudoJet> globalGhosts, globalGhostsIter, subtracted_particles, subtracted_particles_clean;
   subtracted_particles.reserve(particles.size());
@@ -149,6 +156,7 @@ void getJetsFromParticles(std::vector<float> rho_, std::vector<float> etaBins_, 
       subtractor.set_alpha(alphaParams[aI]);
       subtractor.set_remove_all_zero_pt_particles(true);
       subtractor.set_max_eta(maxGlobalAbsEta);
+      subtractor.set_keep_original_masses();
       subtracted_particles = subtractor.do_subtraction(realConst, ghosts);
 
       for(unsigned int pI = 0; pI < subtracted_particles.size(); ++pI){
@@ -176,7 +184,7 @@ void getJetsFromParticles(std::vector<float> rho_, std::vector<float> etaBins_, 
     subtractor.set_alpha(alphaParams[aI]);
     subtractor.set_max_eta(maxGlobalAbsEta);
     subtractor.set_remove_all_zero_pt_particles(true);
-    
+    subtractor.set_keep_original_masses();
     subtracted_particles = subtractor.do_subtraction(particles, globalGhosts, &globalGhostsIter);
 
     for(unsigned int pI = 0; pI < subtracted_particles.size(); ++pI){
@@ -187,7 +195,7 @@ void getJetsFromParticles(std::vector<float> rho_, std::vector<float> etaBins_, 
     fastjet::ClusterSequence cs(subtracted_particles_clean, jet_def);
 
     std::string jtStr = baseCS[1] + "Alpha" + std::to_string(alphaParams[aI]);
-    ((*jets)[jtStr]) = fastjet::sorted_by_pt(cs.inclusive_jets(5.));
+    ((*jets)[jtStr]) = fastjet::sorted_by_pt(cs.inclusive_jets(minJtPt));
     subtracted_particles_clean.clear();
 
     //Hacked iterative subtractor - use remaining ghosts to recalc rho
@@ -216,7 +224,7 @@ void getJetsFromParticles(std::vector<float> rho_, std::vector<float> etaBins_, 
     fastjet::ClusterSequence csIter(subtracted_particles_clean, jet_def);
 
     jtStr = baseCS[2] + "Alpha" + std::to_string(alphaParams[aI]);
-    ((*jets)[jtStr]) = fastjet::sorted_by_pt(csIter.inclusive_jets(5.));
+    ((*jets)[jtStr]) = fastjet::sorted_by_pt(csIter.inclusive_jets(minJtPt));
   }
 
   cpp[1]->stop();
@@ -343,7 +351,7 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
   cppWatch inCluster5[nParaMax];
   cppWatch inCluster6[nParaMax];
   
-  std::string outFileName = inFileName.substr(0, inFileName.find(".root"));
+  std::string outFileName = inFileName.substr(0, inFileName.rfind(".root"));
   while(outFileName.find("/") != std::string::npos){outFileName.replace(0, outFileName.find("/")+1, "");}
   outFileName = "output/" + dateStr + "/" + outFileName + "_NPara" + std::to_string(nPara) + "_CS_" + dateStr + ".root";
 
@@ -364,7 +372,13 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
 
   Float_t fcalA_et_, fcalC_et_;
   Float_t cent_;
+
+  std::vector<float>* etaBinsOut_p=new std::vector<float>;
+  std::vector<float>* rhoOut_p=new std::vector<float>;
+  std::vector<float>* rhoCorrOut_p=new std::vector<float>;
     
+  
+
   const Int_t nJtAlgo = 4;
   std::vector<std::string> jtAlgos = {"NoSub"};
   std::vector<int> jtAlphas = {0};
@@ -397,15 +411,19 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
 
   Int_t njtTruth_;
   Float_t jtptTruth_[nMaxJets];
-  Float_t jtchgptTruth_[nMaxJets];
   Float_t jtetaTruth_[nMaxJets];
   Float_t jtphiTruth_[nMaxJets];
+  Float_t jtchgptTruth_[nMaxJets];
+  Float_t jtchgetaTruth_[nMaxJets];
+  Float_t jtchgphiTruth_[nMaxJets];
 
   Int_t njtTruth4GeV_;
   Float_t jtptTruth4GeV_[nMaxJets];
-  Float_t jtchgptTruth4GeV_[nMaxJets];
   Float_t jtetaTruth4GeV_[nMaxJets];
   Float_t jtphiTruth4GeV_[nMaxJets];
+  Float_t jtchgptTruth4GeV_[nMaxJets];
+  Float_t jtchgetaTruth4GeV_[nMaxJets];
+  Float_t jtchgphiTruth4GeV_[nMaxJets];
 
   std::vector<float>* etaBins_p=nullptr;
   std::vector<float>* phiBins_p=nullptr;
@@ -474,6 +492,9 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
   clusterJetsCS_p->Branch("fcalC_et", &fcalC_et_, "fcalC_et/F");
 
   clusterJetsCS_p->Branch("cent", &cent_, "cent/F");
+  clusterJetsCS_p->Branch("etaBins", &etaBinsOut_p);
+  clusterJetsCS_p->Branch("rho", &rhoOut_p);
+  clusterJetsCS_p->Branch("rhoCorr", &rhoCorrOut_p);
 
   for(Int_t jI = 0; jI < nJtAlgo; ++jI){
     clusterJetsCS_p->Branch(("njt" + jtAlgos[jI]).c_str(), &(njt_[jI]), ("njt" + jtAlgos[jI] + "/I").c_str());
@@ -501,16 +522,20 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
     if(doTruth){
       clusterJetsCS_p->Branch("njtTruth", &njtTruth_, "njtTruth/I");
       clusterJetsCS_p->Branch("jtptTruth", jtptTruth_, "jtptTruth[njtTruth]/F");
-      clusterJetsCS_p->Branch("jtchgptTruth", jtchgptTruth_, "jtchgptTruth[njtTruth]/F");
       clusterJetsCS_p->Branch("jtetaTruth", jtetaTruth_, "jtetaTruth[njtTruth]/F");
       clusterJetsCS_p->Branch("jtphiTruth", jtphiTruth_, "jtphiTruth[njtTruth]/F");      
+      clusterJetsCS_p->Branch("jtchgptTruth", jtchgptTruth_, "jtchgptTruth[njtTruth]/F");
+      clusterJetsCS_p->Branch("jtchgetaTruth", jtchgetaTruth_, "jtchgetaTruth[njtTruth]/F");
+      clusterJetsCS_p->Branch("jtchgphiTruth", jtchgphiTruth_, "jtchgphiTruth[njtTruth]/F");
 
       if(!doCalo){
 	clusterJetsCS_p->Branch("njtTruth4GeV", &njtTruth4GeV_, "njtTruth4GeV/I");
 	clusterJetsCS_p->Branch("jtptTruth4GeV", jtptTruth4GeV_, "jtptTruth4GeV[njtTruth4GeV]/F");
-	clusterJetsCS_p->Branch("jtchgptTruth4GeV", jtchgptTruth4GeV_, "jtchgptTruth4GeV[njtTruth4GeV]/F");
 	clusterJetsCS_p->Branch("jtetaTruth4GeV", jtetaTruth4GeV_, "jtetaTruth4GeV[njtTruth4GeV]/F");
 	clusterJetsCS_p->Branch("jtphiTruth4GeV", jtphiTruth4GeV_, "jtphiTruth4GeV[njtTruth4GeV]/F");     
+	clusterJetsCS_p->Branch("jtchgptTruth4GeV", jtchgptTruth4GeV_, "jtchgptTruth4GeV[njtTruth4GeV]/F");
+	clusterJetsCS_p->Branch("jtchgphiTruth4GeV", jtchgphiTruth4GeV_, "jtchgphiTruth4GeV[njtTruth4GeV]/F");
+	clusterJetsCS_p->Branch("jtchgetaTruth4GeV", jtchgetaTruth4GeV_, "jtchgetaTruth4GeV[njtTruth4GeV]/F");
       }
     }
   }
@@ -619,9 +644,10 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
 
   //std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 
-  const Int_t nEntries = TMath::Min(100000, (Int_t)clusterTree_p->GetEntries());
+  const Int_t nEntries = TMath::Min(10000, (Int_t)clusterTree_p->GetEntries());
   const Int_t nDiv = TMath::Max(1, nEntries/400);
 
+  /*
   clusterJetsCS_p->Branch("run", &run_, "run/I");
   clusterJetsCS_p->Branch("lumi", &lumi_, "lumi/i");
   clusterJetsCS_p->Branch("evt", &evt_, "evt/I");
@@ -630,7 +656,7 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
   clusterJetsCS_p->Branch("fcalC_et", &fcalC_et_, "fcalC_et/F");
 
   clusterJetsCS_p->Branch("cent", &cent_, "cent/F");
-
+  */
   std::vector<Int_t> runVect;
   std::vector<UInt_t> lumiVect;
   std::vector<Int_t> evtVect;
@@ -638,12 +664,13 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
   std::vector<float> fcalC_etVect;
   std::vector<float> centVect;
   std::vector<std::vector<float> > rhoVect;
+  std::vector<std::vector<float> > rhoCorrVect;
   std::vector<std::vector<fastjet::PseudoJet> > particles;
   std::vector<std::map<std::string, std::vector<fastjet::PseudoJet> > > jets;
   
   std::vector<std::vector<float> > atlasPt, atlasPhi, atlasEta;
-  std::vector<std::vector<float> > truthPt, truthChgPt, truthPhi, truthEta;
-  std::vector<std::vector<float> > truth4GeVPt, truth4GeVChgPt, truth4GeVPhi, truth4GeVEta;
+  std::vector<std::vector<float> > truthPt, truthPhi, truthEta, truthChgPt, truthChgPhi, truthChgEta;
+  std::vector<std::vector<float> > truth4GeVPt, truth4GeVPhi, truth4GeVEta, truth4GeVChgPt, truth4GeVChgPhi, truth4GeVChgEta;
   
   for(Int_t pI = 0; pI < nPara; ++pI){
     particles.push_back({});
@@ -658,24 +685,32 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
     atlasEta[pI].reserve(500);
 
     truthPt.push_back({});
-    truthChgPt.push_back({});
     truthPhi.push_back({});
     truthEta.push_back({});
+    truthChgPt.push_back({});
+    truthChgEta.push_back({});
+    truthChgPhi.push_back({});
 
     truthPt[pI].reserve(500);
-    truthChgPt[pI].reserve(500);
     truthPhi[pI].reserve(500);
     truthEta[pI].reserve(500);
+    truthChgPt[pI].reserve(500);
+    truthChgEta[pI].reserve(500);
+    truthChgPhi[pI].reserve(500);
 
     truth4GeVPt.push_back({});
-    truth4GeVChgPt.push_back({});
     truth4GeVPhi.push_back({});
     truth4GeVEta.push_back({});
+    truth4GeVChgPt.push_back({});
+    truth4GeVChgPhi.push_back({});
+    truth4GeVChgEta.push_back({});
 
     truth4GeVPt[pI].reserve(500);
-    truth4GeVChgPt[pI].reserve(500);
     truth4GeVPhi[pI].reserve(500);
     truth4GeVEta[pI].reserve(500);
+    truth4GeVChgPt[pI].reserve(500);
+    truth4GeVChgEta[pI].reserve(500);
+    truth4GeVChgPhi[pI].reserve(500);
 
     jets.push_back({});
     for(Int_t jI = 0; jI < nJtAlgo; ++jI){
@@ -694,6 +729,23 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
     preCluster.start();
     if(entry%nDiv == 0) std::cout << " Entry " << entry << "/" << nEntries << std::endl;
     clusterTree_p->GetEntry(entry);
+
+    if(rhoOut_p->size() == 0){
+      for(unsigned int eI = 0; eI < etaBins_p->size(); ++eI){
+	etaBinsOut_p->push_back(etaBins_p->at(eI));
+      }
+
+      for(unsigned int rI = 0; rI < rho_p->size(); ++rI){
+	rhoOut_p->push_back(0.0);
+	rhoCorrOut_p->push_back(0.0);
+      }
+    }
+    else{
+      for(unsigned int rI = 0; rI < rhoOut_p->size(); ++rI){
+	(*rhoOut_p)[rI] = 0.0;
+	(*rhoCorrOut_p)[rI] = 0.0;
+      }
+    }
 
     for(unsigned int cI = 0; cI < clusterE_p->size(); ++cI){      
       if(TMath::Abs(clusterEta_p->at(cI)) > maxJtAbsEta + rParam) continue;
@@ -785,9 +837,10 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
       //std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 
       fastjet::ClusterSequence cs(towerParticles, jet_def);
-      std::vector<fastjet::PseudoJet> towerJets = fastjet::sorted_by_pt(cs.inclusive_jets(20.));
+      std::vector<fastjet::PseudoJet> towerJets = fastjet::sorted_by_pt(cs.inclusive_jets(minJtPt));
 
       for(unsigned int rI = 0; rI < rho_p->size(); ++rI){
+	rhoOut_p->at(rI) = rho_p->at(rI)/(2.*TMath::Pi()*deltaEta);
 	rho_p->at(rI) = 0.0;
 
 	Double_t etaVal = (etaBins_p->at(rI) + etaBins_p->at(rI+1))/2.;
@@ -820,11 +873,14 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
       for(unsigned int rI = 0; rI < rho_p->size(); ++rI){
 	Double_t areaFactor = ((Double_t)etaNGoodTowers[rI])/(Double_t)etaPhiGoodTower[rI].size();
 	rho_p->at(rI) /= (deltaEta*2.*TMath::Pi()*areaFactor);
+	rhoCorrOut_p->at(rI) = rho_p->at(rI);
       }
     }
     else{
       for(unsigned int rI = 0; rI < rho_p->size(); ++rI){
 	rho_p->at(rI) /= 1000.;
+	rhoOut_p->at(rI) = rho_p->at(rI);
+	rhoCorrOut_p->at(rI) = rho_p->at(rI);
       }
     }
 
@@ -838,7 +894,8 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
     
     cent_ = centTable.getCent(fcalA_et_ + fcalC_et_);
     centVect.push_back(cent_);
-    rhoVect.push_back((*rho_p));
+    rhoVect.push_back((*rhoOut_p));
+    rhoCorrVect.push_back((*rhoCorrOut_p));
 
     if(inATLASFileName.size() != 0){
       int entry2 = entry;
@@ -888,7 +945,7 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
 	}
 	
 	fastjet::ClusterSequence cs(tempParticles, jet_def);
-	std::vector<fastjet::PseudoJet> tempJets = fastjet::sorted_by_pt(cs.inclusive_jets(10.));
+	std::vector<fastjet::PseudoJet> tempJets = fastjet::sorted_by_pt(cs.inclusive_jets(minJtPt));
 	for(unsigned int aI = 0; aI < tempJets.size(); ++aI){
 	  truthPt[entry%nPara].push_back(tempJets.at(aI).pt());
 
@@ -899,13 +956,15 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
 
 	  fastjet::PseudoJet chgJet = join(tempChgParticles2);
 	  truthChgPt[entry%nPara].push_back(chgJet.pt());
+	  truthChgPhi[entry%nPara].push_back(chgJet.phi_std());
+	  truthChgEta[entry%nPara].push_back(chgJet.eta());
 	  tempChgParticles2.clear();
 	  truthEta[entry%nPara].push_back(tempJets.at(aI).eta());
 	  truthPhi[entry%nPara].push_back(tempJets.at(aI).phi_std());
 	}		
 
 	fastjet::ClusterSequence cs4GeV(tempParticles4GeV, jet_def);
-	tempJets = fastjet::sorted_by_pt(cs4GeV.inclusive_jets(10.));
+	tempJets = fastjet::sorted_by_pt(cs4GeV.inclusive_jets(minJtPt));
 	for(unsigned int aI = 0; aI < tempJets.size(); ++aI){
 	  truth4GeVPt[entry%nPara].push_back(tempJets.at(aI).pt());
 
@@ -916,6 +975,8 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
 
 	  fastjet::PseudoJet chgJet = join(tempChgParticles2);
 	  truth4GeVChgPt[entry%nPara].push_back(chgJet.pt());
+	  truth4GeVChgEta[entry%nPara].push_back(chgJet.eta());
+	  truth4GeVChgPhi[entry%nPara].push_back(chgJet.phi_std());
 	  tempChgParticles2.clear();
 	  truth4GeVEta[entry%nPara].push_back(tempJets.at(aI).eta());
 	  truth4GeVPhi[entry%nPara].push_back(tempJets.at(aI).phi_std());
@@ -924,9 +985,12 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
       else{
 	for(unsigned int aI = 0; aI < truth_pt_p->size(); ++aI){
 	  truthPt[entry%nPara].push_back(truth_pt_p->at(aI));
-	  truthChgPt[entry%nPara].push_back(-1);
 	  truthEta[entry%nPara].push_back(truth_eta_p->at(aI));
 	  truthPhi[entry%nPara].push_back(truth_phi_p->at(aI));
+
+	  truthChgPt[entry%nPara].push_back(-1);
+	  truthChgEta[entry%nPara].push_back(-1);
+	  truthChgPhi[entry%nPara].push_back(-1);
 	}			
       }
     }
@@ -950,6 +1014,9 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
 	  for(fastjet::PseudoJet& ijet : jets[pI][jtAlgos[jI]] ) {
 	    if(ijet.pt() < minJtPt) continue;
 	    if(TMath::Abs(ijet.eta()) >= maxJtAbsEta) continue;
+	    if(!doCalo){
+	      if(TMath::Abs(ijet.eta()) >= maxTrkJtAbsEta) continue;
+	    }
 	  
 	    jtpt_[jI][njt_[jI]] = ijet.pt();
 	    jtphi_[jI][njt_[jI]] = ijet.phi_std();
@@ -965,6 +1032,12 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
 	if(doATLASFile){
        	  njtATLAS_ = 0;
 	  for(unsigned int aI = 0; aI < atlasPt[pI].size(); ++aI){
+	    if(atlasPt[pI][aI] < minJtPt) continue;
+            if(TMath::Abs(atlasEta[pI][aI]) >= maxJtAbsEta) continue;
+            if(!doCalo){
+              if(TMath::Abs(atlasEta[pI][aI]) >= maxTrkJtAbsEta) continue;
+            }
+
 	    jtptATLAS_[njtATLAS_] = atlasPt[pI][aI];
 	    jtetaATLAS_[njtATLAS_] = atlasEta[pI][aI];
 	    jtphiATLAS_[njtATLAS_] = atlasPhi[pI][aI];
@@ -974,20 +1047,36 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
 	  if(doTruth){
 	    njtTruth_ = 0;
 	    for(unsigned int aI = 0; aI < truthPt[pI].size(); ++aI){
+	      if(truthPt[pI][aI] < minJtPt) continue;
+	      if(TMath::Abs(truthEta[pI][aI]) >= maxJtAbsEta) continue;
+	      if(!doCalo){
+		if(TMath::Abs(truthEta[pI][aI]) >= maxTrkJtAbsEta) continue;
+	      }
+
 	      jtptTruth_[njtTruth_] = truthPt[pI][aI];
-	      jtchgptTruth_[njtTruth_] = truthChgPt[pI][aI];
 	      jtetaTruth_[njtTruth_] = truthEta[pI][aI];
 	      jtphiTruth_[njtTruth_] = truthPhi[pI][aI];
+	      jtchgptTruth_[njtTruth_] = truthChgPt[pI][aI];
+	      jtchgphiTruth_[njtTruth_] = truthChgPhi[pI][aI];
+	      jtchgetaTruth_[njtTruth_] = truthChgEta[pI][aI];
 	      ++njtTruth_;
 	    }
 
 	    if(!doCalo){
 	      njtTruth4GeV_ = 0;
 	      for(unsigned int aI = 0; aI < truth4GeVPt[pI].size(); ++aI){
+		if(truth4GeVPt[pI][aI] < minJtPt) continue;
+		if(TMath::Abs(truth4GeVEta[pI][aI]) >= maxJtAbsEta) continue;
+		if(!doCalo){
+		  if(TMath::Abs(truth4GeVEta[pI][aI]) >= maxTrkJtAbsEta) continue;
+		}
+
 		jtptTruth4GeV_[njtTruth4GeV_] = truth4GeVPt[pI][aI];
-		jtchgptTruth4GeV_[njtTruth4GeV_] = truth4GeVChgPt[pI][aI];
 		jtetaTruth4GeV_[njtTruth4GeV_] = truth4GeVEta[pI][aI];
 		jtphiTruth4GeV_[njtTruth4GeV_] = truth4GeVPhi[pI][aI];
+		jtchgptTruth4GeV_[njtTruth4GeV_] = truth4GeVChgPt[pI][aI];
+		jtchgphiTruth4GeV_[njtTruth4GeV_] = truth4GeVChgPhi[pI][aI];
+		jtchgetaTruth4GeV_[njtTruth4GeV_] = truth4GeVChgEta[pI][aI];
 		++njtTruth4GeV_;
 	      }
 	    }
@@ -995,14 +1084,14 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
 
 	  for(Int_t jI = 0; jI < nJtAlgo; ++jI){
 	    std::vector<bool> isMatched;
-	    for(unsigned int aI = 0; aI < atlasPt[pI].size(); ++aI){
+	    for(int aI = 0; aI < njtATLAS_; ++aI){
 	      isMatched.push_back(false);
 	    }
-
+	  
 	    for(Int_t jI2 = 0; jI2 < njt_[jI]; ++jI2){
-	      for(unsigned int aI = 0; aI < atlasPt[pI].size(); ++aI){
+	      for(int aI = 0; aI < njtATLAS_; ++aI){
 		if(isMatched[aI]) continue;
-		if(getDR(atlasEta[pI][aI], atlasPhi[pI][aI], jteta_[jI][jI2], jtphi_[jI][jI2]) < rParam){
+		if(getDR(jtetaATLAS_[aI], jtphiATLAS_[aI], jteta_[jI][jI2], jtphi_[jI][jI2]) < rParam){
 		  atlasmatchpos_[jI][jI2] = aI;
 		  isMatched[aI] = true;
 		  break;
@@ -1012,14 +1101,14 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
 
 	    if(doTruth){
 	      isMatched.clear();
-	      for(unsigned int aI = 0; aI < truthPt[pI].size(); ++aI){
+	      for(int aI = 0; aI < njtTruth_; ++aI){
 		isMatched.push_back(false);
 	      }
 	      
 	      for(Int_t jI2 = 0; jI2 < njt_[jI]; ++jI2){
-		for(unsigned int aI = 0; aI < truthPt[pI].size(); ++aI){
+		for(int aI = 0; aI < njtTruth_; ++aI){
 		  if(isMatched[aI]) continue;
-		  if(getDR(truthEta[pI][aI], truthPhi[pI][aI], jteta_[jI][jI2], jtphi_[jI][jI2]) < rParam){
+		  if(getDR(jtetaTruth_[aI], jtphiTruth_[aI], jteta_[jI][jI2], jtphi_[jI][jI2]) < rParam){
 		    truthmatchpos_[jI][jI2] = aI;
 		    isMatched[aI] = true;
 		    break;
@@ -1029,14 +1118,14 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
 
 	      if(!doCalo){
 		isMatched.clear();
-		for(unsigned int aI = 0; aI < truth4GeVPt[pI].size(); ++aI){
+		for(int aI = 0; aI < njtTruth4GeV_; ++aI){
 		  isMatched.push_back(false);
 		}
 		
 		for(Int_t jI2 = 0; jI2 < njt_[jI]; ++jI2){
-		  for(unsigned int aI = 0; aI < truth4GeVPt[pI].size(); ++aI){
+		  for(int aI = 0; aI < njtTruth4GeV_; ++aI){
 		    if(isMatched[aI]) continue;
-		    if(getDR(truth4GeVEta[pI][aI], truth4GeVPhi[pI][aI], jteta_[jI][jI2], jtphi_[jI][jI2]) < rParam){
+		    if(getDR(jtetaTruth4GeV_[aI], jtphiTruth4GeV_[aI], jteta_[jI][jI2], jtphi_[jI][jI2]) < rParam){
 		      truth4GeVmatchpos_[jI][jI2] = aI;
 		      isMatched[aI] = true;
 		      break;
@@ -1052,15 +1141,19 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
 	  atlasPhi[pI].clear();
 
 	  truthPt[pI].clear();
-	  truthChgPt[pI].clear();
 	  truthEta[pI].clear();
 	  truthPhi[pI].clear();
+	  truthChgPt[pI].clear();
+	  truthChgPhi[pI].clear();
+	  truthChgEta[pI].clear();
 
 	  if(!doCalo){
 	    truth4GeVPt[pI].clear();
-	    truth4GeVChgPt[pI].clear();
 	    truth4GeVEta[pI].clear();
 	    truth4GeVPhi[pI].clear();
+	    truth4GeVChgPt[pI].clear();
+	    truth4GeVChgPhi[pI].clear();
+	    truth4GeVChgEta[pI].clear();
 	  }
 	}
       
@@ -1070,6 +1163,9 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
 	fcalA_et_ = fcalA_etVect[pI];
 	fcalC_et_ = fcalC_etVect[pI];
 	cent_ = centVect[pI];
+
+	(*rhoOut_p) = rhoVect[pI];
+	(*rhoCorrOut_p) = rhoCorrVect[pI];
 	
 	clusterJetsCS_p->Fill();
       }
@@ -1083,6 +1179,7 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
       centVect.clear();
 
       rhoVect.clear();
+      rhoCorrVect.clear();
 
       //std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 

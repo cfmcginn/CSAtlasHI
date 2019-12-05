@@ -15,6 +15,7 @@
 
 //Local
 #include "include/checkMakeDir.h"
+#include "include/etaPhiFunc.h"
 #include "include/getLogBins.h"
 #include "include/histDefUtility.h"
 #include "include/plotUtilities.h"
@@ -292,10 +293,10 @@ int makeClusterHist(std::string inFileName)
 	    
 	    for(Int_t jI2 = 0; jI2 < njt_[aI]; ++jI2){
 	      if(truthmatchpos_[aI][jI2] == jI){
-		matchedTruthSpectra_p[aI][centPos]->Fill(jtpt_[aI][jI2]);
+		matchedTruthSpectra_p[aI][centPos]->Fill(jtptTruth_[jI]);
 		recoOverGen_VPt_p[aI][centPos][jtPos]->Fill(jtpt_[aI][jI2]/jtptTruth_[jI]);
 		recoGen_DeltaEta_p[aI][centPos][jtPos]->Fill(jteta_[aI][jI2] - jtetaTruth_[jI]);
-		recoGen_DeltaPhi_p[aI][centPos][jtPos]->Fill(jtphi_[aI][jI2] - jtphiTruth_[jI]);
+		recoGen_DeltaPhi_p[aI][centPos][jtPos]->Fill(getDPHI(jtphi_[aI][jI2], jtphiTruth_[jI]));
 		isFilled = true;
 		break;
 	      }
