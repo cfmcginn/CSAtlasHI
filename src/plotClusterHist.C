@@ -387,10 +387,13 @@ int plotClusterHist(std::string inFileName, std::string globalStr = "")
       delete canv_p;
     }
 
-
     TH1D* recoOverGenMean_p[nMaxJtAlgo][nMaxCentBins];
     TH1D* recoOverGenSigma_p[nMaxJtAlgo][nMaxCentBins];
     TH1D* recoOverGenSigmaOverMean_p[nMaxJtAlgo][nMaxCentBins];
+
+    TH1D* recoGenSigma_DeltaEta_p[nMaxJtAlgo][nMaxCentBins];
+
+    TH1D* recoGenSigma_DeltaPhi_p[nMaxJtAlgo][nMaxCentBins];
 
     Int_t nX = 1;
     Int_t nY = 1;
@@ -404,7 +407,7 @@ int plotClusterHist(std::string inFileName, std::string globalStr = "")
       if(jtAlgos[jI].find("ATLAS") != std::string::npos) continue;
       if(jtAlgos[jI].find("Truth") != std::string::npos) continue;
 
-      std::vector<TH1*> centHistMean, centHistSigma, centHistSigmaOverMean;
+      std::vector<TH1*> centHistMean, centHistSigma, centHistSigmaOverMean, centHistSigmaEta, centHistSigmaPhi;
             
       for(unsigned int cI = 0; cI < centBinsStr.size(); ++cI){
 	TCanvas* canvFit_p = new TCanvas("canvFit_p", "", 450*nX, 450*nY);
@@ -421,8 +424,11 @@ int plotClusterHist(std::string inFileName, std::string globalStr = "")
 	recoOverGenMean_p[jI][cI] = new TH1D(("recoOverGenMean_" + nameStr + "_h").c_str(), ";Jet p_{T} [GeV];#LTReco./Gen.#GT", nJtPtBins, jtPtBins);
 	recoOverGenSigma_p[jI][cI] = new TH1D(("recoOverGenSigma_" + nameStr + "_h").c_str(), ";Jet p_{T} [GeV];#sigma(Reco./Gen.)", nJtPtBins, jtPtBins);
 	recoOverGenSigmaOverMean_p[jI][cI] = new TH1D(("recoOverGenSigmaOverMean_" + nameStr + "_h").c_str(), ";Jet p_{T} [GeV];#sigma(Reco./Gen.)/#LTReco./Gen.#GT", nJtPtBins, jtPtBins);
+	recoGenSigma_DeltaEta_p[jI][cI] = new TH1D(("recoGenSigma_DeltaEta_" + nameStr + "_h").c_str(), ";Jet p_{T} [GeV];#sigma(#eta_{Reco.} - #eta_{Gen.})", nJtPtBins, jtPtBins);
+	recoGenSigma_DeltaPhi_p[jI][cI] = new TH1D(("recoGenSigma_DeltaPhi_" + nameStr + "_h").c_str(), ";Jet p_{T} [GeV];#sigma(#phi_{Reco.} - #phi_{Gen.})", nJtPtBins, jtPtBins);
 
-	centerTitles({recoOverGenMean_p[jI][cI], recoOverGenSigma_p[jI][cI], recoOverGenSigmaOverMean_p[jI][cI]});
+
+	centerTitles({recoOverGenMean_p[jI][cI], recoOverGenSigma_p[jI][cI], recoOverGenSigmaOverMean_p[jI][cI], recoGenSigma_DeltaEta_p[jI][cI], recoGenSigma_DeltaPhi_p[jI][cI]});
 	
 	for(Int_t jI2 = 0; jI2 < nJtPtBins; ++jI2){
 	//std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
@@ -434,7 +440,12 @@ int plotClusterHist(std::string inFileName, std::string globalStr = "")
 	  recoOverGenMean_p[jI][cI]->SetBinError(jI2+1, recoOverGen_VPt_p[jI][cI][jI2]->GetMeanError());
 	  recoOverGenSigma_p[jI][cI]->SetBinContent(jI2+1, recoOverGen_VPt_p[jI][cI][jI2]->GetStdDev());
 	  recoOverGenSigma_p[jI][cI]->SetBinError(jI2+1, recoOverGen_VPt_p[jI][cI][jI2]->GetStdDevError());
-	  //std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+
+	  recoGenSigma_DeltaEta_p[jI][cI]->SetBinContent(jI2+1, recoGen_DeltaEta_p[jI][cI][jI2]->GetStdDev());
+	  recoGenSigma_DeltaEta_p[jI][cI]->SetBinError(jI2+1, recoGen_DeltaEta_p[jI][cI][jI2]->GetStdDevError());
+
+	  recoGenSigma_DeltaPhi_p[jI][cI]->SetBinContent(jI2+1, recoGen_DeltaPhi_p[jI][cI][jI2]->GetStdDev());
+	  recoGenSigma_DeltaPhi_p[jI][cI]->SetBinError(jI2+1, recoGen_DeltaPhi_p[jI][cI][jI2]->GetStdDevError());
 
 	  recoOverGenSigmaOverMean_p[jI][cI]->SetBinContent(jI2+1, recoOverGen_VPt_p[jI][cI][jI2]->GetStdDev()/recoOverGen_VPt_p[jI][cI][jI2]->GetMean());
 	  recoOverGenSigmaOverMean_p[jI][cI]->SetBinError(jI2+1, recoOverGen_VPt_p[jI][cI][jI2]->GetStdDevError()/recoOverGen_VPt_p[jI][cI][jI2]->GetMean());
@@ -475,12 +486,17 @@ int plotClusterHist(std::string inFileName, std::string globalStr = "")
 	configHist(recoOverGenMean_p[jI][cI], cI);
 	configHist(recoOverGenSigma_p[jI][cI], cI);
 	configHist(recoOverGenSigmaOverMean_p[jI][cI], cI);
+	configHist(recoGenSigma_DeltaEta_p[jI][cI], cI);
+	configHist(recoGenSigma_DeltaPhi_p[jI][cI], cI);
 
 	//std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 		
 	centHistMean.push_back(recoOverGenMean_p[jI][cI]);
 	centHistSigma.push_back(recoOverGenSigma_p[jI][cI]);
 	centHistSigmaOverMean.push_back(recoOverGenSigmaOverMean_p[jI][cI]);
+
+	centHistSigmaEta.push_back(recoGenSigma_DeltaEta_p[jI][cI]);
+	centHistSigmaPhi.push_back(recoGenSigma_DeltaPhi_p[jI][cI]);
 
 	//std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 
@@ -493,6 +509,7 @@ int plotClusterHist(std::string inFileName, std::string globalStr = "")
 
 
       for(unsigned int cI = 0; cI < centBinsStr.size(); ++cI){
+	std::string nameStr = jtAlgos[jI] + "_" + centBinsStr[cI];
 	TCanvas* canvFit_p = new TCanvas("canvFit_p", "", 450*nX, 450*nY);
 	canvFit_p->SetTopMargin(0.01);
 	canvFit_p->SetLeftMargin(0.01);
@@ -500,8 +517,6 @@ int plotClusterHist(std::string inFileName, std::string globalStr = "")
 	canvFit_p->SetRightMargin(0.01);
 	
 	canvFit_p->Divide(nX, nY);
-
-	std::string nameStr = jtAlgos[jI] + "_" + centBinsStr[cI];
 
 	for(Int_t jI2 = 0; jI2 < nJtPtBins; ++jI2){
 	  centerTitles(recoGen_DeltaEta_p[jI][cI][jI2]);
@@ -542,6 +557,8 @@ int plotClusterHist(std::string inFileName, std::string globalStr = "")
       }
 
       for(unsigned int cI = 0; cI < centBinsStr.size(); ++cI){
+	std::string nameStr = jtAlgos[jI] + "_" + centBinsStr[cI];
+
 	TCanvas* canvFit_p = new TCanvas("canvFit_p", "", 450*nX, 450*nY);
 	canvFit_p->SetTopMargin(0.01);
 	canvFit_p->SetLeftMargin(0.01);
@@ -549,8 +566,6 @@ int plotClusterHist(std::string inFileName, std::string globalStr = "")
 	canvFit_p->SetRightMargin(0.01);
 	
 	canvFit_p->Divide(nX, nY);
-
-	std::string nameStr = jtAlgos[jI] + "_" + centBinsStr[cI];
 
 	for(Int_t jI2 = 0; jI2 < nJtPtBins; ++jI2){
 	  centerTitles(recoGen_DeltaPhi_p[jI][cI][jI2]);
@@ -594,6 +609,8 @@ int plotClusterHist(std::string inFileName, std::string globalStr = "")
       plotResponseSet(paramMap, centHistMean, centBinsStr, "recoOverGenMean", jtAlgos[jI], dateStr, 0.6, 1.6);
       //std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
       plotResponseSet(paramMap, centHistSigmaOverMean, centBinsStr, "recoOverGenSigmaOverMean", jtAlgos[jI], dateStr, 0.0, 0.6);
+      plotResponseSet(paramMap, centHistSigmaEta, centBinsStr, "recoGenSigma_DeltaEta", jtAlgos[jI], dateStr, 0.0, 0.15);
+      plotResponseSet(paramMap, centHistSigmaPhi, centBinsStr, "recoGenSigma_DeltaPhi", jtAlgos[jI], dateStr, 0.0, 0.15);
       //std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
     }
 
@@ -601,7 +618,7 @@ int plotClusterHist(std::string inFileName, std::string globalStr = "")
 
     
     for(unsigned int cI = 0; cI < centBinsStr.size(); ++cI){
-      std::vector<TH1*> algoHistMean, algoHistSigma, algoHistSigmaOverMean;
+      std::vector<TH1*> algoHistMean, algoHistSigma, algoHistSigmaOverMean, algoHistSigmaEta, algoHistSigmaPhi;
       std::vector<std::string> jtAlgosLabel;
       
       for(unsigned int jI = 0; jI < jtAlgos.size(); ++jI){
@@ -611,10 +628,14 @@ int plotClusterHist(std::string inFileName, std::string globalStr = "")
 	configHist(recoOverGenMean_p[jI][cI], jI);
 	configHist(recoOverGenSigma_p[jI][cI], jI);
 	configHist(recoOverGenSigmaOverMean_p[jI][cI], jI);
+	configHist(recoGenSigma_DeltaEta_p[jI][cI], jI);
+	configHist(recoGenSigma_DeltaPhi_p[jI][cI], jI);
 	
 	algoHistMean.push_back(recoOverGenMean_p[jI][cI]);
 	algoHistSigma.push_back(recoOverGenSigma_p[jI][cI]);
 	algoHistSigmaOverMean.push_back(recoOverGenSigmaOverMean_p[jI][cI]);
+	algoHistSigmaEta.push_back(recoGenSigma_DeltaEta_p[jI][cI]);
+	algoHistSigmaPhi.push_back(recoGenSigma_DeltaPhi_p[jI][cI]);
 
 	jtAlgosLabel.push_back(jtAlgos[jI]);
       }
@@ -624,6 +645,9 @@ int plotClusterHist(std::string inFileName, std::string globalStr = "")
       plotResponseSet(paramMap, algoHistMean, jtAlgosLabel, "recoOverGenMean", centBinsStr[cI], dateStr, 0.6, 1.6);
       //std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
       plotResponseSet(paramMap, algoHistSigmaOverMean, jtAlgosLabel, "recoOverGenSigmaOverMean", centBinsStr[cI], dateStr, 0.0, 0.6);
+
+      plotResponseSet(paramMap, algoHistSigmaEta, jtAlgosLabel, "recoGenSigma_DeltaEta", centBinsStr[cI], dateStr, 0.0, 0.15);
+      plotResponseSet(paramMap, algoHistSigmaPhi, jtAlgosLabel, "recoGenSigma_DeltaPhi", centBinsStr[cI], dateStr, 0.0, 0.15);
       //std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
     }
     
@@ -636,6 +660,9 @@ int plotClusterHist(std::string inFileName, std::string globalStr = "")
 	delete recoOverGenMean_p[jI][cI];
 	delete recoOverGenSigma_p[jI][cI];
 	delete recoOverGenSigmaOverMean_p[jI][cI];
+
+	delete recoGenSigma_DeltaEta_p[jI][cI];
+	delete recoGenSigma_DeltaPhi_p[jI][cI];
       }
     }
   }
