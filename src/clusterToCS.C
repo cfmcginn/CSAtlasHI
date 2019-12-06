@@ -122,8 +122,19 @@ void getJetsFromParticles(std::vector<float> rho_, std::vector<float> etaBins_, 
     (*jets)[iter.first].clear();
   }
 
+  std::vector<fastjet::PseudoJet> particles4GeV;
+  for(unsigned int pI = 0; pI < particles.size(); ++pI){
+    if(particles[pI].pt() < 4.) continue;
+
+    particles4GeV.push_back(particles[pI]);
+  }
+
+  
   fastjet::ClusterSequenceArea csA(particles, jet_def, area_def);  
   ((*jets)["NoSub"]) = fastjet::sorted_by_pt(csA.inclusive_jets(minJtPt));
+
+  fastjet::ClusterSequence cs4(particles4GeV, jet_def);  
+  ((*jets)["4GeVCut"]) = fastjet::sorted_by_pt(cs4.inclusive_jets(minJtPt));
 
   std::vector<fastjet::PseudoJet> globalGhosts, globalGhostsIter, subtracted_particles, subtracted_particles_clean;
   subtracted_particles.reserve(particles.size());
@@ -395,8 +406,8 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
   std::vector<float>* rhoOut_p=new std::vector<float>;
   std::vector<float>* rhoCorrOut_p=new std::vector<float>;  
 
-  const Int_t nJtAlgo = 4;
-  std::vector<std::string> jtAlgos = {"NoSub"};
+  const Int_t nJtAlgo = 5;
+  std::vector<std::string> jtAlgos = {"NoSub", "4GeVCut"};
   std::vector<int> jtAlphas = {0};
   //Lets construct some algos
   for(unsigned int aI = 0; aI < alphaParams.size(); ++aI){
@@ -660,7 +671,7 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
 
   //std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 
-  const Int_t nEntries = TMath::Min(10000000, (Int_t)clusterTree_p->GetEntries());
+  const Int_t nEntries = TMath::Min(1000, (Int_t)clusterTree_p->GetEntries());
   const Int_t nDiv = TMath::Max(1, nEntries/400);
 
   /*

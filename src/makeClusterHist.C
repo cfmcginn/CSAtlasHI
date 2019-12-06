@@ -249,19 +249,21 @@ int makeClusterHist(std::string inFileName)
 	spectra_p[nJtAlgo][centPos]->Fill(jtptATLAS_[jI]);
 	
 	for(Int_t aI = 0; aI < nJtAlgo; ++aI){
-	  bool isFilled = false;
+	  //	  bool isFilled = false;
 	  
 	  for(Int_t jI2 = 0; jI2 < njt_[aI]; ++jI2){
 	    if(atlasmatchpos_[aI][jI2] == jI){
 	      matchedATLASSpectra_p[aI][centPos]->Fill(jtpt_[aI][jI2]);
-	      isFilled = true;
+	      //      isFilled = true;
 	      break;
 	    }
 	  }
-	  
+
+	  /*	  
 	  if(!isFilled && jtptATLAS_[jI] > 80.){
 	    std::cout << "NO MATCH IN ALGO " << jtAlgos[aI] << " (entry, ptATLAS): " << entry << ", " << jtptATLAS_[jI] << std::endl;
 	  }
+	  */
 	}
       }
 

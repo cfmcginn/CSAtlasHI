@@ -1,0 +1,6 @@
+#SAMPLE,Weights as derived from xsection, filter efficiency, and entries per sample
+JZ1,1
+JZ2,0.00712295
+JZ3,0.0000432772
+JZ4,0
+JZ5,0
