@@ -680,7 +680,7 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
 
   //std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 
-  const Int_t nEntries = TMath::Min(1000, (Int_t)clusterTree_p->GetEntries());
+  const Int_t nEntries = TMath::Min(20000, (Int_t)clusterTree_p->GetEntries());
   const Int_t nDiv = TMath::Max(1, nEntries/400);
 
   /*

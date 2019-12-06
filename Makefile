@@ -44,7 +44,7 @@ bin/plotClusterHist.exe: src/plotClusterHist.C
 	$(CXX) $(CXXFLAGS) src/plotClusterHist.C $(ROOT) $(INCLUDE) -o bin/plotClusterHist.exe
 
 bin/deriveSampleWeights.exe: src/deriveSampleWeights.C
-	$(CXX) $(CXXFLAGS) src/deriveSampleWeights.C $(INCLUDE) -o bin/deriveSampleWeights.exe
+	$(CXX) $(CXXFLAGS) src/deriveSampleWeights.C $(INCLUDE) $(ROOT) -o bin/deriveSampleWeights.exe
 
 clean:
 	rm -f ./*~

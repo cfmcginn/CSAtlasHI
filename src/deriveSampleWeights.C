@@ -6,14 +6,33 @@
 #include <map>
 #include <string>
 
+//ROOT
+#include "TDatime.h"
+#include "TFile.h"
+#include "TH1D.h"
+#include "TTree.h"
+
 //Local
 #include "include/checkMakeDir.h"
+#include "include/histDefUtility.h"
 #include "include/stringUtil.h"
 
 int deriveSampleWeights(std::string inXSectionFileName, std::string inEntriesFileName)
 {
   if(!checkFileExt(inXSectionFileName, ".txt")) return 1;
-  if(!checkFileExt(inEntriesFileName, ".txt")) return 1;
+
+  bool entriesFileTXT = true;
+  if(!checkFileExt(inEntriesFileName, ".txt")){
+    entriesFileTXT = false;
+    if(!checkFileExt(inEntriesFileName, ".root")) return 1;
+  }
+
+  TDatime* date = new TDatime();
+  const std::string dateStr = std::to_string(date->GetDate());
+  delete date;
+
+  checkMakeDir("output");
+  checkMakeDir("output/" + dateStr);
 
   std::map<std::string, std::vector<double> > jzMapToXSec;
   std::map<std::string, double> jzMapToEntries;
@@ -32,18 +51,42 @@ int deriveSampleWeights(std::string inXSectionFileName, std::string inEntriesFil
   }
   inXSectionFile.close();
 
-  std::ifstream inEntriesFile(inEntriesFileName.c_str());
-  while(std::getline(inEntriesFile, tempStr)){
-    if(tempStr.size() == 0) continue;
-    std::vector<std::string> tempVect = commaSepStringToVect(tempStr);
-    if(tempVect.size() == 0) continue;
-    if(tempVect[0].size() == 0) continue;
-    if(tempVect[0].substr(0,1).find("#") != std::string::npos) continue;
-
-    jzMapToEntries[tempVect[0]] = std::stod(tempVect[1]);
+  if(entriesFileTXT){
+    std::ifstream inEntriesFile(inEntriesFileName.c_str());
+    while(std::getline(inEntriesFile, tempStr)){
+      if(tempStr.size() == 0) continue;
+      std::vector<std::string> tempVect = commaSepStringToVect(tempStr);
+      if(tempVect.size() == 0) continue;
+      if(tempVect[0].size() == 0) continue;
+      if(tempVect[0].substr(0,1).find("#") != std::string::npos) continue;
+      
+      jzMapToEntries[tempVect[0]] = std::stod(tempVect[1]);
+    }
+    inEntriesFile.close();
   }
-  inEntriesFile.close();
+  else{
+    TFile* inFile_p = new TFile(inEntriesFileName.c_str(), "READ");
+    TTree* inTree_p = (TTree*)inFile_p->Get("clusterJetsCS");
+    Int_t jzVal_;
 
+    inTree_p->SetBranchStatus("*", 0);
+    inTree_p->SetBranchStatus("jzVal", 1);
+
+    inTree_p->SetBranchAddress("jzVal", &jzVal_);
+
+    const Int_t nEntries = inTree_p->GetEntries();
+
+    for(Int_t entry = 0; entry < nEntries; ++entry){
+      inTree_p->GetEntry(entry);
+
+      std::string jzValStr = "JZ" + std::to_string(jzVal_);
+      if(jzMapToEntries.count(jzValStr) == 0) std::cout << "WARNING MAP IS MISSING VALUE " << jzValStr << std::endl;
+      ++(jzMapToEntries[jzValStr]);      
+    }
+
+    inFile_p->Close();
+    delete inFile_p;
+  }
   
   double maxWeight = -1.0;
   for(auto const& iter : jzMapToXSec){
@@ -62,7 +105,87 @@ int deriveSampleWeights(std::string inXSectionFileName, std::string inEntriesFil
   std::cout << "RENORMALIZED WEIGHTS: " << std::endl;
   for(auto const& iter : jzMapToXSec){
     std::cout << iter.first << ": " << jzMapToWeights[iter.first]/maxWeight << std::endl;
+    jzMapToWeights[iter.first] /= maxWeight;
   }
+  
+  std::string outFileName = "";
+  if(!entriesFileTXT){
+    outFileName = inEntriesFileName.substr(0, inEntriesFileName.rfind(".root"));
+    while(outFileName.find("/") != std::string::npos){
+      outFileName.replace(0, outFileName.find("/")+1, "");
+    }
+    outFileName = "output/" + dateStr + "/" + outFileName + "_DerivedWeights_" + dateStr + ".root";
+    
+    TFile* outFile_p = new TFile(outFileName.c_str(), "RECREATE");
+    TH1D* jtpt_h = new TH1D("jtpt_h", ";Jet p_{T} [GeV];Counts", 120, 20, 260);
+    TH1D* jtpt_Weighted_h = new TH1D("jtpt_Weighted_h", ";Jet p_{T} [GeV];Counts (Weighted)", 120, 20, 260);
+    centerTitles({jtpt_h, jtpt_Weighted_h});
+
+    TFile* inFile_p = new TFile(inEntriesFileName.c_str(), "READ");
+    TTree* inTree_p = (TTree*)inFile_p->Get("clusterJetsCS");
+    Int_t jzVal_;
+
+    const Int_t nMaxJets = 500;
+    Int_t njtTruth_;
+    Float_t jtptTruth_[nMaxJets];
+
+    inTree_p->SetBranchStatus("*", 0);
+    inTree_p->SetBranchStatus("jzVal", 1);
+    inTree_p->SetBranchStatus("njtTruth", 1);
+    inTree_p->SetBranchStatus("jtptTruth", 1);
+
+    inTree_p->SetBranchAddress("jzVal", &jzVal_);
+    inTree_p->SetBranchAddress("njtTruth", &njtTruth_);
+    inTree_p->SetBranchAddress("jtptTruth", jtptTruth_);
+
+    const Int_t nEntries = inTree_p->GetEntries();
+
+    for(Int_t entry = 0; entry < nEntries; ++entry){
+      inTree_p->GetEntry(entry);
+
+      std::string jzValStr = "JZ" + std::to_string(jzVal_);
+      if(jzMapToEntries.count(jzValStr) == 0) std::cout << "WARNING MAP IS MISSING VALUE " << jzValStr << std::endl;
+
+      Double_t weight = jzMapToWeights[jzValStr];      
+
+      for(Int_t jI = 0; jI < njtTruth_; ++jI){
+	jtpt_h->Fill(jtptTruth_[jI]);
+	jtpt_Weighted_h->Fill(jtptTruth_[jI], weight);
+      }
+    }
+
+    inFile_p->Close();
+    delete inFile_p;
+
+    outFile_p->cd();
+
+    jtpt_h->Write("", TObject::kOverwrite);
+    delete jtpt_h;
+
+    jtpt_Weighted_h->Write("", TObject::kOverwrite);
+    delete jtpt_Weighted_h;
+
+    outFile_p->Close();
+    delete outFile_p;
+  }
+  else{
+    outFileName = inEntriesFileName.substr(0, inEntriesFileName.rfind(".txt"));
+    while(outFileName.find("/") != std::string::npos){
+      outFileName.replace(0, outFileName.find("/")+1, "");
+    }
+    outFileName = "output/" + dateStr + "/" + outFileName + "_DerivedWeights_" + dateStr + ".root";
+  }
+
+  outFileName.replace(outFileName.rfind(".root"), 5, "");
+  outFileName = outFileName + ".txt";
+  
+  std::ofstream outFile(outFileName.c_str());
+
+  for(auto const& iter : jzMapToWeights){
+    outFile << iter.first << "," << iter.second << std::endl;
+  }
+
+  outFile.close();
 
   return 0;
 }

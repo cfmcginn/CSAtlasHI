@@ -6,7 +6,7 @@ then
     id=$1
 fi
 
-inputFile=input/rucioJZ2Files.txt
+inputFile=input/rucioJZAllFiles.txt
 
 #source /usatlas/u/cfmcginn/.setEnv.sh
 

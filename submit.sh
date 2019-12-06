@@ -43,7 +43,7 @@ done
 tar -czvf inTar.tar.gz $inputStr
 mv inTar.tar.gz $cDir
 
-count=$(cat input/rucioJZ2Files.txt | wc -l)
+count=$(cat input/rucioJZAllFiles.txt | wc -l)
 
 echo "transfer_input_files = inTar.tar.gz,scriptForCondor.sh" >> $cFile2
 echo "Queue $count" >> $cFile2

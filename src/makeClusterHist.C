@@ -1,4 +1,5 @@
 //cpp
+#include <fstream>
 #include <iostream>
 #include <map>
 #include <string>
@@ -21,9 +22,30 @@
 #include "include/plotUtilities.h"
 #include "include/returnRootFileContentsList.h"
 
-int makeClusterHist(std::string inFileName)
+int makeClusterHist(std::string inFileName, std::string jzWeightsName = "")
 {
   if(!checkFileExt(inFileName, "root")) return 1;
+  const bool doJZWeights = checkFileExt(jzWeightsName, "txt");
+  std::map<std::string, double> weightMap;
+  if(doJZWeights){
+    std::ifstream inFile(jzWeightsName.c_str());
+    std::string tempStr;
+    while(std::getline(inFile, tempStr)){
+      if(tempStr.size() == 0) continue;
+      std::vector<std::string> tempVect = commaSepStringToVect(tempStr);
+      if(tempVect.size() == 0) continue;
+      if(tempVect[0].size() == 0) continue;
+      if(tempVect[0].substr(0, 1).find("#") != std::string::npos) continue;
+
+      weightMap[tempVect[0]] = std::stod(tempVect[1]);
+    }
+    inFile.close();
+
+    std::cout << "WEIGHTS: " << std::endl;
+    for(auto const& iter : weightMap){
+      std::cout << " " << iter.first << ", " << iter.second << std::endl;
+    }
+  }
 
   TFile* inFile_p = new TFile(inFileName.c_str(), "READ");
   std::vector<std::string> tnamedList = returnRootFileContentsList(inFile_p, "TNamed");
@@ -146,6 +168,7 @@ int makeClusterHist(std::string inFileName)
     }
   }
 
+  Int_t jtVal_;
   Float_t cent_;
 
   const Int_t nMaxJets = 500;
@@ -172,8 +195,10 @@ int makeClusterHist(std::string inFileName)
 
   csTree_p->SetBranchStatus("*", 0);
   csTree_p->SetBranchStatus("cent", 1);
+  if(doJZWeights) csTree_p->SetBranchStatus("jtVal", 1);
 
   csTree_p->SetBranchAddress("cent", &cent_);
+  if(doJZWeights) csTree_p->SetBranchAddress("jtVal", &jtVal_);
 
   for(Int_t jI = 0; jI < nJtAlgo; ++jI){
     csTree_p->SetBranchStatus(("njt" + jtAlgos[jI]).c_str(), 1);
@@ -228,6 +253,13 @@ int makeClusterHist(std::string inFileName)
     }
     if(centPos < 0) continue;
 
+    Double_t weight = 1.0;
+    if(doJZWeights){
+      std::string jtValStr = "JZ" + std::to_string(jtVal_);
+      if(weightMap.count(jtValStr) == 0) std::cout << "WARNING CANNOT FIND WEIGHT FOR JTVAL \'" << jtValStr << "\'" << std::endl;
+      weight = weightMap[jtValStr];
+    }
+
     ++(nEventPerCent[centPos]);
     
     for(Int_t aI = 0; aI < nJtAlgo; ++aI){
@@ -236,7 +268,7 @@ int makeClusterHist(std::string inFileName)
 	if(jtpt_[aI][jI] < jtPtLow) continue;
 	if(jtpt_[aI][jI] >= jtPtHigh) continue;
 	
-	spectra_p[aI][centPos]->Fill(jtpt_[aI][jI]);
+	spectra_p[aI][centPos]->Fill(jtpt_[aI][jI], weight);
       }    
     }
 
@@ -246,14 +278,14 @@ int makeClusterHist(std::string inFileName)
 	if(jtptATLAS_[jI] < jtPtLow) continue;
 	if(jtptATLAS_[jI] >= jtPtHigh) continue;
 	
-	spectra_p[nJtAlgo][centPos]->Fill(jtptATLAS_[jI]);
+	spectra_p[nJtAlgo][centPos]->Fill(jtptATLAS_[jI], weight);
 	
 	for(Int_t aI = 0; aI < nJtAlgo; ++aI){
 	  //	  bool isFilled = false;
 	  
 	  for(Int_t jI2 = 0; jI2 < njt_[aI]; ++jI2){
 	    if(atlasmatchpos_[aI][jI2] == jI){
-	      matchedATLASSpectra_p[aI][centPos]->Fill(jtpt_[aI][jI2]);
+	      matchedATLASSpectra_p[aI][centPos]->Fill(jtpt_[aI][jI2], weight);
 	      //      isFilled = true;
 	      break;
 	    }
@@ -288,17 +320,17 @@ int makeClusterHist(std::string inFileName)
 	  }
 	  if(jtPos == -1 && jtptTruth_[jI] == jtPtBins[nJtPtBins]) jtPos = nJtPtBins-1;
 	  
-	  spectra_p[nJtAlgo+1][centPos]->Fill(jtptTruth_[jI]);
+	  spectra_p[nJtAlgo+1][centPos]->Fill(jtptTruth_[jI], weight);
 	  	  
 	  for(Int_t aI = 0; aI < nJtAlgo; ++aI){
 	    bool isFilled = false;
 	    
 	    for(Int_t jI2 = 0; jI2 < njt_[aI]; ++jI2){
 	      if(truthmatchpos_[aI][jI2] == jI){
-		matchedTruthSpectra_p[aI][centPos]->Fill(jtptTruth_[jI]);
-		recoOverGen_VPt_p[aI][centPos][jtPos]->Fill(jtpt_[aI][jI2]/jtptTruth_[jI]);
-		recoGen_DeltaEta_p[aI][centPos][jtPos]->Fill(jteta_[aI][jI2] - jtetaTruth_[jI]);
-		recoGen_DeltaPhi_p[aI][centPos][jtPos]->Fill(getDPHI(jtphi_[aI][jI2], jtphiTruth_[jI]));
+		matchedTruthSpectra_p[aI][centPos]->Fill(jtptTruth_[jI], weight);
+		recoOverGen_VPt_p[aI][centPos][jtPos]->Fill(jtpt_[aI][jI2]/jtptTruth_[jI], weight);
+		recoGen_DeltaEta_p[aI][centPos][jtPos]->Fill(jteta_[aI][jI2] - jtetaTruth_[jI], weight);
+		recoGen_DeltaPhi_p[aI][centPos][jtPos]->Fill(getDPHI(jtphi_[aI][jI2], jtphiTruth_[jI]), weight);
 		isFilled = true;
 		break;
 	      }
@@ -409,12 +441,13 @@ int makeClusterHist(std::string inFileName)
 
 int main(int argc, char* argv[])
 {
-  if(argc != 2){
-    std::cout << "Usage: ./bin/makeClusterHist.exe <inFileName>. return 1" << std::endl;
+  if(argc < 2 || argc > 3){
+    std::cout << "Usage: ./bin/makeClusterHist.exe <inFileName> <jzWeightsName-default=\'\'>. return 1" << std::endl;
     return 1;
   }
   
   int retVal = 0;
-  retVal += makeClusterHist(argv[1]);
+  if(argc == 2) retVal += makeClusterHist(argv[1]);
+  else if(argc == 3) retVal += makeClusterHist(argv[1], argv[2]);
   return retVal;
 }
