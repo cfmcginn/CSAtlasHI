@@ -301,7 +301,7 @@ void getJetsFromParticles(std::vector<float> rho_, std::vector<float> etaBins_, 
 }
 
 
-int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::string caloTrackStr = "calo")
+int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::string caloTrackStr = "calo", std::string jzStr = "")
 {
   if(!checkFileExt(inFileName, ".root")) return 1;
   const std::string centTableStr = "input/centrality_cuts_Gv32_proposed_RCMOD2.txt";
@@ -386,6 +386,13 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
 
   Int_t run_, evt_;
   UInt_t lumi_;
+
+  Int_t jzVal_ = -1;
+  if(jzStr.find("JZ1") != std::string::npos) jzVal_ = 1;
+  else if(jzStr.find("JZ2") != std::string::npos) jzVal_ = 2;
+  else if(jzStr.find("JZ3") != std::string::npos) jzVal_ = 3;
+  else if(jzStr.find("JZ4") != std::string::npos) jzVal_ = 4;
+  else if(jzStr.find("JZ5") != std::string::npos) jzVal_ = 5;
 
   Int_t runATLAS_, evtATLAS_;
   UInt_t lumiATLAS_;
@@ -514,6 +521,8 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
   clusterJetsCS_p->Branch("run", &run_, "run/I");
   clusterJetsCS_p->Branch("lumi", &lumi_, "lumi/i");
   clusterJetsCS_p->Branch("evt", &evt_, "evt/I");
+
+  clusterJetsCS_p->Branch("jzVal", &jzVal_, "jzVal/I");
 
   clusterJetsCS_p->Branch("fcalA_et", &fcalA_et_, "fcalA_et/F");
   clusterJetsCS_p->Branch("fcalC_et", &fcalC_et_, "fcalC_et/F");
