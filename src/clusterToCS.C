@@ -1298,8 +1298,8 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
 
 int main(int argc, char* argv[])
 {
-  if(argc < 2 || argc > 4){
-    std::cout << "Usage: ./bin/clusterToCS.exe <inFileName> <inATLASFileName-default=\'\'> <caloTrackStr-default=\'calo\'>" << std::endl;
+  if(argc < 2 || argc > 5){
+    std::cout << "Usage: ./bin/clusterToCS.exe <inFileName> <inATLASFileName-default=\'\'> <caloTrackStr-default=\'calo\'> <jzStr-default=\'\'>" << std::endl;
     return 1;
   }
 
@@ -1307,5 +1307,6 @@ int main(int argc, char* argv[])
   if(argc == 2) retVal += clusterToCS(argv[1]);
   else if(argc == 3) retVal += clusterToCS(argv[1], argv[2]);
   else if(argc == 4) retVal += clusterToCS(argv[1], argv[2], argv[3]);
+  else if(argc == 5) retVal += clusterToCS(argv[1], argv[2], argv[3], argv[4]);
   return retVal;
 }
