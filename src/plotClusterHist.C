@@ -413,6 +413,9 @@ int plotClusterHist(std::string inFileName, std::string globalStr = "")
     else if(nJtPtBins == 4) nX = 4;
     else if(nJtPtBins == 5 || nJtPtBins == 6){nX = 3; nY = 2;}
     else if(nJtPtBins == 7 || nJtPtBins == 8){nX = 4; nY = 2;} 
+    else if(nJtPtBins == 9){nX = 3; nY = 3;} 
+    else if(nJtPtBins == 10 || nJtPtBins == 11 || nJtPtBins == 12 ){nX = 4; nY = 3;} 
+    else if(nJtPtBins == 13 || nJtPtBins == 14 || nJtPtBins == 15 ){nX = 5; nY = 3;} 
  
     for(unsigned int jI = 0; jI < jtAlgos.size(); ++jI){
       if(jtAlgos[jI].find("ATLAS") != std::string::npos) continue;
@@ -607,7 +610,7 @@ int plotClusterHist(std::string inFileName, std::string globalStr = "")
 	  recoGen_DeltaEta_p[jI][cI][jI2]->GetXaxis()->SetTitleSize(20);
 	  recoGen_DeltaEta_p[jI][cI][jI2]->GetYaxis()->SetTitleSize(20);
 
- 	  recoGen_DeltaEta_p[jI][cI][jI2]->SetMinimum(0.6);
+ 	  recoGen_DeltaEta_p[jI][cI][jI2]->SetMinimum(getMinGTZero(recoGen_DeltaEta_p[jI][cI][jI2])/2.);
 	  recoGen_DeltaEta_p[jI][cI][jI2]->DrawCopy("HIST E1");
 	  gPad->SetLogy();
 
@@ -663,7 +666,7 @@ int plotClusterHist(std::string inFileName, std::string globalStr = "")
 	  recoGen_DeltaPhi_p[jI][cI][jI2]->GetXaxis()->SetTitleSize(20);
 	  recoGen_DeltaPhi_p[jI][cI][jI2]->GetYaxis()->SetTitleSize(20);
 
- 	  recoGen_DeltaPhi_p[jI][cI][jI2]->SetMinimum(0.6);
+ 	  recoGen_DeltaPhi_p[jI][cI][jI2]->SetMinimum(getMinGTZero(recoGen_DeltaPhi_p[jI][cI][jI2])/2.);
 	  recoGen_DeltaPhi_p[jI][cI][jI2]->DrawCopy("HIST E1");
 	
 	  gPad->SetLogy();

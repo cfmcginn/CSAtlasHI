@@ -22,11 +22,12 @@
 #include "include/plotUtilities.h"
 #include "include/returnRootFileContentsList.h"
 
-int makeClusterHist(std::string inFileName, std::string jzWeightsName = "")
+int makeClusterHist(std::string inFileName, std::string jzWeightsName = "", std::string centWeightsName = "")
 {
   if(!checkFileExt(inFileName, "root")) return 1;
   const bool doJZWeights = checkFileExt(jzWeightsName, "txt");
-  std::map<std::string, double> weightMap;
+  const bool doCentWeights = checkFileExt(centWeightsName, "txt");
+  std::map<std::string, double> jzWeightMap;
   if(doJZWeights){
     std::ifstream inFile(jzWeightsName.c_str());
     std::string tempStr;
@@ -37,12 +38,33 @@ int makeClusterHist(std::string inFileName, std::string jzWeightsName = "")
       if(tempVect[0].size() == 0) continue;
       if(tempVect[0].substr(0, 1).find("#") != std::string::npos) continue;
 
-      weightMap[tempVect[0]] = std::stod(tempVect[1]);
+      jzWeightMap[tempVect[0]] = std::stod(tempVect[1]);
     }
     inFile.close();
 
     std::cout << "WEIGHTS: " << std::endl;
-    for(auto const& iter : weightMap){
+    for(auto const& iter : jzWeightMap){
+      std::cout << " " << iter.first << ", " << iter.second << std::endl;
+    }
+  }
+
+  std::map<int, double> centWeightMap;
+  if(doCentWeights){
+    std::ifstream inFile(centWeightsName.c_str());
+    std::string tempStr;
+    while(std::getline(inFile, tempStr)){
+      if(tempStr.size() == 0) continue;
+      std::vector<std::string> tempVect = commaSepStringToVect(tempStr);
+      if(tempVect.size() == 0) continue;
+      if(tempVect[0].size() == 0) continue;
+      if(tempVect[0].substr(0, 1).find("#") != std::string::npos) continue;
+
+      centWeightMap[std::stoi(tempVect[0])] = std::stod(tempVect[2]);
+    }
+    inFile.close();
+
+    std::cout << "WEIGHTS: " << std::endl;
+    for(auto const& iter : centWeightMap){
       std::cout << " " << iter.first << ", " << iter.second << std::endl;
     }
   }
@@ -111,9 +133,9 @@ int makeClusterHist(std::string inFileName, std::string jzWeightsName = "")
 
   const Float_t maxJtAbsEta = 2.4;//std::stod(tnamedMap["maxJtAbsEta"]);
   
-  const Int_t nJtPtBins = 5;
-  Float_t jtPtLow = 60;
-  Float_t jtPtHigh = 200;
+  const Int_t nJtPtBins = 12;
+  Float_t jtPtLow = 30;
+  Float_t jtPtHigh = 400;
   if(isStrSame(caloTrkStr, "trk")){
     jtPtLow *= 0.7;
     jtPtHigh *= 0.7;
@@ -123,6 +145,8 @@ int makeClusterHist(std::string inFileName, std::string jzWeightsName = "")
   std::vector<std::string> jtPtBinsStrVect;
   
   TFile* outFile_p = new TFile(outFileName.c_str(), "RECREATE");
+  TH1D* cent_p = new TH1D("cent_h", ";Centrality (%);Weighted Counts", 100, -0.5, 99.5);
+  centerTitles(cent_p);
   TH1D* spectra_p[nMaxJtAlgo+2][nCentBins];
   TH1D* matchedATLASSpectra_p[nMaxJtAlgo][nCentBins];
   TH1D* matchedTruthSpectra_p[nMaxJtAlgo][nCentBins];
@@ -168,7 +192,7 @@ int makeClusterHist(std::string inFileName, std::string jzWeightsName = "")
     }
   }
 
-  Int_t jtVal_;
+  Int_t jzVal_;
   Float_t cent_;
 
   const Int_t nMaxJets = 500;
@@ -195,10 +219,10 @@ int makeClusterHist(std::string inFileName, std::string jzWeightsName = "")
 
   csTree_p->SetBranchStatus("*", 0);
   csTree_p->SetBranchStatus("cent", 1);
-  if(doJZWeights) csTree_p->SetBranchStatus("jtVal", 1);
+  if(doJZWeights) csTree_p->SetBranchStatus("jzVal", 1);
 
   csTree_p->SetBranchAddress("cent", &cent_);
-  if(doJZWeights) csTree_p->SetBranchAddress("jtVal", &jtVal_);
+  if(doJZWeights) csTree_p->SetBranchAddress("jzVal", &jzVal_);
 
   for(Int_t jI = 0; jI < nJtAlgo; ++jI){
     csTree_p->SetBranchStatus(("njt" + jtAlgos[jI]).c_str(), 1);
@@ -255,10 +279,16 @@ int makeClusterHist(std::string inFileName, std::string jzWeightsName = "")
 
     Double_t weight = 1.0;
     if(doJZWeights){
-      std::string jtValStr = "JZ" + std::to_string(jtVal_);
-      if(weightMap.count(jtValStr) == 0) std::cout << "WARNING CANNOT FIND WEIGHT FOR JTVAL \'" << jtValStr << "\'" << std::endl;
-      weight = weightMap[jtValStr];
+      std::string jzValStr = "JZ" + std::to_string(jzVal_);
+      if(jzWeightMap.count(jzValStr) == 0) std::cout << "WARNING CANNOT FIND WEIGHT FOR JTVAL \'" << jzValStr << "\'" << std::endl;
+      weight = jzWeightMap[jzValStr];
     }
+    if(doCentWeights){
+      int centInt_ = (int)cent_;
+      weight *= centWeightMap[centInt_];
+    }
+
+    cent_p->Fill(cent_, weight);
 
     ++(nEventPerCent[centPos]);
     
@@ -349,6 +379,9 @@ int makeClusterHist(std::string inFileName, std::string jzWeightsName = "")
   delete inFile_p;
 
   outFile_p->cd();
+
+  cent_p->Write("", TObject::kOverwrite);
+  delete cent_p;
 
   for(Int_t aI = 0; aI < nJtAlgo+2; ++aI){
     if(!doATLAS && aI > nJtAlgo) break;
@@ -441,13 +474,14 @@ int makeClusterHist(std::string inFileName, std::string jzWeightsName = "")
 
 int main(int argc, char* argv[])
 {
-  if(argc < 2 || argc > 3){
-    std::cout << "Usage: ./bin/makeClusterHist.exe <inFileName> <jzWeightsName-default=\'\'>. return 1" << std::endl;
+  if(argc < 2 || argc > 4){
+    std::cout << "Usage: ./bin/makeClusterHist.exe <inFileName> <jzWeightsName-default=\'\'> <centWeightsName-default=\'\'>. return 1" << std::endl;
     return 1;
   }
   
   int retVal = 0;
   if(argc == 2) retVal += makeClusterHist(argv[1]);
   else if(argc == 3) retVal += makeClusterHist(argv[1], argv[2]);
+  else if(argc == 4) retVal += makeClusterHist(argv[1], argv[2], argv[3]);
   return retVal;
 }

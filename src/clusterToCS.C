@@ -47,7 +47,7 @@ const double ghost_area = 0.01;
 const int active_area_repeats = 1;
 const fastjet::GhostedAreaSpec ghost_spec(maxGlobalAbsEta, active_area_repeats, ghost_area);
 const fastjet::AreaDefinition area_def = fastjet::AreaDefinition(fastjet::active_area_explicit_ghosts, ghost_spec);
-const Float_t minJtPt = 20.;
+const Float_t minJtPt = 15.;
 const Float_t maxJtAbsEta = 3.;
 const Float_t maxTrkJtAbsEta = 2.4;
 const Int_t nMaxJets = 500;
@@ -680,7 +680,7 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
 
   //std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 
-  const Int_t nEntries = TMath::Min(20000, (Int_t)clusterTree_p->GetEntries());
+  const Int_t nEntries = TMath::Min(25000, (Int_t)clusterTree_p->GetEntries());
   const Int_t nDiv = TMath::Max(1, nEntries/400);
 
   /*

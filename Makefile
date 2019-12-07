@@ -20,7 +20,7 @@ MKDIR_BIN=mkdir -p $(PWD)/bin
 MKDIR_OUTPUT=mkdir -p $(PWD)/output
 MKDIR_PDF=mkdir -p $(PWD)/pdfDir
 
-all: mkdirBin mkdirPdf mkdirOutput bin/clusterToCS.exe bin/makeClusterHist.exe bin/plotClusterHist.exe bin/deriveSampleWeights.exe
+all: mkdirBin mkdirPdf mkdirOutput bin/clusterToCS.exe bin/makeClusterHist.exe bin/plotClusterHist.exe bin/deriveSampleWeights.exe bin/deriveCentWeights.exe
 
 mkdirBin:
 	$(MKDIR_BIN)
@@ -45,6 +45,9 @@ bin/plotClusterHist.exe: src/plotClusterHist.C
 
 bin/deriveSampleWeights.exe: src/deriveSampleWeights.C
 	$(CXX) $(CXXFLAGS) src/deriveSampleWeights.C $(INCLUDE) $(ROOT) -o bin/deriveSampleWeights.exe
+
+bin/deriveCentWeights.exe: src/deriveCentWeights.C
+	$(CXX) $(CXXFLAGS) src/deriveCentWeights.C $(INCLUDE) $(ROOT) -o bin/deriveCentWeights.exe
 
 clean:
 	rm -f ./*~
