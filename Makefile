@@ -5,25 +5,31 @@ ifeq "$(GCCVERSION)" "1"
   CXXFLAGS += -Wno-error=misleading-indentation
 endif
 
-INCLUDE=-I $(PWD)
+INCLUDE=-I$(PWD)
+LIB=-L$(PWD)/lib
 ROOT=`root-config --cflags --glibs`
 
-FASTJETPATH=/usatlas/u/cfmcginn/Packages/FastJet/fastjet-install
-FASTJETCS=/usatlas/u/cfmcginn/Packages/FastJet/fjcontrib-1.042/ConstituentSubtractor
-FASTJET=`$(FASTJETPATH)/bin/fastjet-config --cxxflags  --libs --plugins --rpath`
-#FASTJET=-I/home/cfmcginn/Packages/FastJet/fastjet-install/include -Wl,-rpath,/home/cfmcginn/Packages/FastJet/fastjet-install/lib -lm -L/home/cfmcginn/Packages/FastJet/fastjet-install/lib -lfastjettools -lfastjet -lfastjetplugins -lsiscone_spherical -lsiscone
+FASTJET=`$(FASTJETPATH)/bin/fastjet-config --cxxflags  --libs --plugins --runpath`
 FJCONTRIB=-lConstituentSubtractor  
 
 PYTHIA8=-I$(PYTHIA8PATH)/include -O2 -pedantic -W -Wall -Wshadow -fPIC -L$(PYTHIA8PATH)/lib -Wl,-rpath,$(PYTHIA8PATH)/lib -lpythia8 -ldl
 
 MKDIR_BIN=mkdir -p $(PWD)/bin
+MKDIR_LIB=mkdir -p $(PWD)/lib
+MKDIR_OBJ=mkdir -p $(PWD)/obj
 MKDIR_OUTPUT=mkdir -p $(PWD)/output
 MKDIR_PDF=mkdir -p $(PWD)/pdfDir
 
-all: mkdirBin mkdirPdf mkdirOutput bin/clusterToCS.exe bin/makeClusterHist.exe bin/plotClusterHist.exe bin/deriveSampleWeights.exe bin/deriveCentWeights.exe
+all: mkdirBin mkdirLib mkdirObj mkdirOutput mkdirPdf obj/globalDebugHandler.o obj/checkMakeDir.o obj/constituentBuilder.o obj/rhoBuilder.o obj/configParser.o obj/centralityFromInput.o lib/libCSATLAS.so bin/makeClusterTree.exe bin/makeClusterHist.exe bin/plotClusterHist.exe bin/deriveSampleWeights.exe bin/deriveCentWeights.exe
 
 mkdirBin:
 	$(MKDIR_BIN)
+
+mkdirLib:
+	$(MKDIR_LIB)
+
+mkdirObj:
+	$(MKDIR_OBJ)
 
 mkdirOutput:
 	$(MKDIR_OUTPUT)
@@ -32,22 +38,46 @@ mkdirPdf:
 	$(MKDIR_PDF)
 
 bin/constituentTest.exe: src/constituentTest.C
-	$(CXX) $(CXXFLAGS) src/constituentTest.C $(ROOT) $(PYTHIA8) -ltbb $(FASTJET) $(FJCONTRIB) $(INCLUDE) -o bin/constituentTest.exe
+	$(CXX) $(CXXFLAGS) src/constituentTest.C $(ROOT) $(PYTHIA8) $(FASTJET) $(FJCONTRIB) $(INCLUDE) -o bin/constituentTest.exe
 
-bin/clusterToCS.exe: src/clusterToCS.C $(FASTJETCS)/ConstituentSubtractor.cc
-	$(CXX) $(CXXFLAGS) src/clusterToCS.C $(FASTJETCS)/ConstituentSubtractor.cc $(ROOT) $(FASTJET) $(FJCONTRIB) $(INCLUDE) -fopenmp -o bin/clusterToCS.exe
+obj/checkMakeDir.o: src/checkMakeDir.C
+	$(CXX) $(CXXFLAGS) -fPIC -c src/checkMakeDir.C -o obj/checkMakeDir.o $(INCLUDE)
+
+obj/globalDebugHandler.o: src/globalDebugHandler.C
+	$(CXX) $(CXXFLAGS) -fPIC -c src/globalDebugHandler.C -o obj/globalDebugHandler.o $(ROOT) $(INCLUDE)
+
+obj/constituentBuilder.o: src/constituentBuilder.C
+	$(CXX) $(CXXFLAGS) -fPIC -c src/constituentBuilder.C -o obj/constituentBuilder.o $(FASTJET) $(ROOT) $(INCLUDE)
+
+obj/rhoBuilder.o: src/rhoBuilder.C
+	$(CXX) $(CXXFLAGS) -fPIC -c src/rhoBuilder.C -o obj/rhoBuilder.o $(INCLUDE)
+
+obj/configParser.o: src/configParser.C
+	$(CXX) $(CXXFLAGS) -fPIC -c src/configParser.C -o obj/configParser.o $(INCLUDE) $(ROOT)
+
+obj/centralityFromInput.o: src/centralityFromInput.C
+	$(CXX) $(CXXFLAGS) -fPIC -c src/centralityFromInput.C -o obj/centralityFromInput.o $(INCLUDE) $(ROOT)
+
+lib/libCSATLAS.so:
+	$(CXX) $(CXXFLAGS) -fPIC -shared -o lib/libCSATLAS.so obj/checkMakeDir.o obj/globalDebugHandler.o obj/constituentBuilder.o obj/rhoBuilder.o obj/configParser.o obj/centralityFromInput.o $(FASTJET) $(ROOT) $(INCLUDE)
+
+bin/makeClusterTree.exe: src/makeClusterTree.C
+	$(CXX) $(CXXFLAGS) src/makeClusterTree.C -o bin/makeClusterTree.exe $(FJCONTRIB) $(FASTJET) $(ROOT) $(INCLUDE) $(LIB) -lCSATLAS
+
+bin/clusterToCS.exe: src/clusterToCS.C
+	$(CXX) $(CXXFLAGS) src/clusterToCS.C $(ROOT) $(FJCONTRIB) $(FASTJET) $(INCLUDE) -fopenmp -o bin/clusterToCS.exe
 
 bin/makeClusterHist.exe: src/makeClusterHist.C
-	$(CXX) $(CXXFLAGS) src/makeClusterHist.C $(ROOT) $(INCLUDE) -o bin/makeClusterHist.exe
+	$(CXX) $(CXXFLAGS) src/makeClusterHist.C $(ROOT) $(INCLUDE) $(LIB) -lCSATLAS -o bin/makeClusterHist.exe
 
 bin/plotClusterHist.exe: src/plotClusterHist.C
-	$(CXX) $(CXXFLAGS) src/plotClusterHist.C $(ROOT) $(INCLUDE) -o bin/plotClusterHist.exe
+	$(CXX) $(CXXFLAGS) src/plotClusterHist.C $(ROOT) $(INCLUDE) $(LIB) -lCSATLAS -o bin/plotClusterHist.exe
 
 bin/deriveSampleWeights.exe: src/deriveSampleWeights.C
-	$(CXX) $(CXXFLAGS) src/deriveSampleWeights.C $(INCLUDE) $(ROOT) -o bin/deriveSampleWeights.exe
+	$(CXX) $(CXXFLAGS) src/deriveSampleWeights.C $(INCLUDE) $(ROOT) $(LIB) -lCSATLAS -o bin/deriveSampleWeights.exe
 
 bin/deriveCentWeights.exe: src/deriveCentWeights.C
-	$(CXX) $(CXXFLAGS) src/deriveCentWeights.C $(INCLUDE) $(ROOT) -o bin/deriveCentWeights.exe
+	$(CXX) $(CXXFLAGS) src/deriveCentWeights.C $(INCLUDE) $(ROOT) $(LIB) -lCSATLAS -o bin/deriveCentWeights.exe
 
 clean:
 	rm -f ./*~
@@ -62,5 +92,9 @@ clean:
 	rm -f include/#*#
 	rm -f input/*~
 	rm -f input/#*#
+	rm -f lib/*.o
+	rm -rf lib
+	rm -f obj/*.o
+	rm -rf obj
 	rm -f src/*~
 	rm -f src/#*#
