@@ -1,0 +1,17 @@
+#This is a comment
+
+INFILENAME,/home/cfmcginn/CUBHIG/tempPlots2020/Jan24plots/mc16_5TeV.root
+OUTFILENAME,test.root
+CENTFILENAME,/home/cfmcginn/Projects/QT/input/centrality_cuts_Gv32_proposed_RCMOD2.txt
+
+ISMC,1
+JZSTR,JZ1
+DOTRACKS,1
+DOTOWERS,1
+
+GHOSTAREA,0.01
+
+RECOJTMINPT,10.0
+GENJTMINPT,10.0
+
+JTMAXABSETA,3.0

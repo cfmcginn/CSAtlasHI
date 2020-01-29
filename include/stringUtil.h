@@ -1,19 +1,20 @@
 #ifndef STRINGUTIL_H
 #define STRINGUTIL_H
 
-//cpp
+//c+cpp
+#include <ctime>
 #include <iostream>
 #include <string>
 #include <vector>
 
-bool isStrSame(std::string inStr1, std::string inStr2)
+inline bool isStrSame(std::string inStr1, std::string inStr2)
 {
   if(inStr1.size() != inStr2.size()) return false;
   if(inStr1.find(inStr2) == std::string::npos) return false;
   return true;
 }
 
-std::string removeAllWhiteSpace(std::string inStr)
+inline std::string removeAllWhiteSpace(std::string inStr)
 {
   while(inStr.find(" ") != std::string::npos){
     inStr.replace(inStr.find(" "), 1, "");
@@ -22,7 +23,7 @@ std::string removeAllWhiteSpace(std::string inStr)
   return inStr;
 }
 
-std::string returnAllCapsString(std::string inStr)
+inline std::string returnAllCapsString(std::string inStr)
 {
   const std::string lowStr = "abcdefghijklmnopqrstuvwxyz";
   const std::string hiStr = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -36,8 +37,7 @@ std::string returnAllCapsString(std::string inStr)
   return inStr;
 }
 
-
-bool isStrFromCharSet(const std::string inStr, const std::string charSet)
+inline bool isStrFromCharSet(const std::string inStr, const std::string charSet)
 {
   for(unsigned int iter = 0; iter < inStr.size(); ++iter){
     if(charSet.find(inStr.substr(iter, 1)) == std::string::npos){
@@ -48,12 +48,11 @@ bool isStrFromCharSet(const std::string inStr, const std::string charSet)
   return true;
 }
 
+inline bool isStrAllAlpha(std::string inStr){return isStrFromCharSet(returnAllCapsString(inStr), "ABCDEFGHIJKLMNOPQRSTUVWXYZ");}
+inline bool isStrInt(std::string inStr){return isStrFromCharSet(inStr, "-0123456789");}
+inline bool isStrFloatOrDouble(std::string inStr){return isStrFromCharSet(inStr, ".-0123456789");}
 
-bool isStrAllAlpha(std::string inStr){return isStrFromCharSet(returnAllCapsString(inStr), "ABCDEFGHIJKLMNOPQRSTUVWXYZ");}
-bool isStrInt(std::string inStr){return isStrFromCharSet(inStr, "-0123456789");}
-bool isStrFloatOrDouble(std::string inStr){return isStrFromCharSet(inStr, ".-0123456789");}
-
-bool isStrTrueOrFalse(std::string inStr)
+inline bool isStrTrueOrFalse(std::string inStr)
 {
   inStr = returnAllCapsString(inStr);
   if(!isStrAllAlpha(inStr)) return false;
@@ -64,8 +63,7 @@ bool isStrTrueOrFalse(std::string inStr)
   return false;
 }
 
-
-bool strToTrueOrFalse(std::string inStr)
+inline bool strToTrueOrFalse(std::string inStr)
 {
   inStr = returnAllCapsString(inStr);
 
@@ -76,7 +74,7 @@ bool strToTrueOrFalse(std::string inStr)
   return false;
 }
 
-int getRVal(const std::string inStr)
+inline int getRVal(const std::string inStr)
 {
   int rVal = -1;
   if(inStr.find("ak1PF") != std::string::npos) rVal = 1;
@@ -101,7 +99,7 @@ int getRVal(const std::string inStr)
   return rVal;
 }
 
-std::string getRValStr(const std::string inStr)
+inline std::string getRValStr(const std::string inStr)
 {
   std::string rVal = "999";
   if(inStr.find("ak1PF") != std::string::npos) rVal = "0.1";
@@ -126,8 +124,7 @@ std::string getRValStr(const std::string inStr)
   return rVal;
 }
 
-
-std::vector<std::string> commaSepStringToVect(std::string inStr)
+inline std::vector<std::string> commaSepStringToVect(std::string inStr)
 {
   std::vector<std::string> retVect;
 
@@ -148,8 +145,7 @@ std::vector<std::string> commaSepStringToVect(std::string inStr)
   return retVect;
 }
 
-
-bool vectContainsStr(std::string inStr, std::vector<std::string>* inVect)
+inline bool vectContainsStr(std::string inStr, std::vector<std::string>* inVect)
 {
   bool isInVect = false;
   if(inStr.size() != 0){
@@ -163,7 +159,7 @@ bool vectContainsStr(std::string inStr, std::vector<std::string>* inVect)
   return isInVect;
 }
 
-std::vector<std::string> strToVect(std::string inStr)
+inline std::vector<std::string> strToVect(std::string inStr)
 {
   std::vector<std::string> retVect;
   while(inStr.find(",") != std::string::npos){
@@ -173,6 +169,44 @@ std::vector<std::string> strToVect(std::string inStr)
   if(inStr.size() != 0) retVect.push_back(inStr);
 
   return retVect;
+}
+
+inline std::string getDateStr()
+{
+  std::time_t now = time(0);
+  std::tm *ltm = std::localtime(&now);
+  std::string dateStr = std::to_string(1+ltm->tm_mon);
+  if(dateStr.size() == 1) dateStr = "0" + dateStr;
+  dateStr = std::to_string(1900 + ltm->tm_year) + dateStr + std::to_string(ltm->tm_mday);
+
+  return dateStr;
+}
+
+inline std::string rootFileNameProc(std::string inFileName, std::vector<std::string> modStrs)
+{
+  const std::string ext = ".root";
+  const std::string defaultName = "stringutil_rootfilenameproc_default";
+  std::string outFileName = inFileName;
+
+  if(outFileName.size() == 0){
+    std::cout << "STRINGUTIL ROOTFILENAMEPROC: Given inFileName is size 0, call defult name \'" << defaultName << "\'." << std::endl;
+    outFileName = defaultName;
+  }
+
+  if(outFileName.size() >= ext.size()){
+    if(isStrSame(outFileName, ext)){
+      std::cout << "STRINGUTIL ROOTFILENAMEPROC: Given inFileName is size 0, call defult name \'" << defaultName << "\'." << std::endl;
+      outFileName = defaultName;
+    }
+    else if(isStrSame(outFileName.substr(outFileName.size()-ext.size(), ext.size()), ext)) outFileName.replace(outFileName.size()-ext.size(), ext.size(), "");
+  }
+
+  for(unsigned int sI = 0; sI < modStrs.size(); ++sI){
+    if(outFileName.size() < modStrs[sI].size() + 1) outFileName = outFileName + "_" + modStrs[sI];
+    else if(!isStrSame(modStrs[sI], outFileName.substr(outFileName.size() - modStrs[sI].size(), modStrs[sI].size()))) outFileName = outFileName + "_" + modStrs[sI];
+  }
+  outFileName = outFileName + ".root";
+  return outFileName;
 }
 
 #endif

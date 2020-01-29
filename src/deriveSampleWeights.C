@@ -7,7 +7,6 @@
 #include <string>
 
 //ROOT
-#include "TDatime.h"
 #include "TFile.h"
 #include "TH1D.h"
 #include "TTree.h"
@@ -19,20 +18,19 @@
 
 int deriveSampleWeights(std::string inXSectionFileName, std::string inEntriesFileName)
 {
-  if(!checkFileExt(inXSectionFileName, ".txt")) return 1;
+  checkMakeDir check;
+  if(!check.checkFileExt(inXSectionFileName, ".txt")) return 1;
 
   bool entriesFileTXT = true;
-  if(!checkFileExt(inEntriesFileName, ".txt")){
+  if(!check.checkFileExt(inEntriesFileName, ".txt")){
     entriesFileTXT = false;
-    if(!checkFileExt(inEntriesFileName, ".root")) return 1;
+    if(!check.checkFileExt(inEntriesFileName, ".root")) return 1;
   }
 
-  TDatime* date = new TDatime();
-  const std::string dateStr = std::to_string(date->GetDate());
-  delete date;
+  const std::string dateStr = getDateStr();
 
-  checkMakeDir("output");
-  checkMakeDir("output/" + dateStr);
+  check.doCheckMakeDir("output");
+  check.doCheckMakeDir("output/" + dateStr);
 
   std::map<std::string, std::vector<double> > jzMapToXSec;
   std::map<std::string, double> jzMapToEntries;

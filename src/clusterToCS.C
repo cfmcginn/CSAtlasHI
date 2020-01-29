@@ -73,22 +73,15 @@ int ghostPos(std::vector<float> bins_, double ghostVal)
   return ghostPos;
 }
 
-int ghostEtaPos(std::vector<float> etaBins_, fastjet::PseudoJet ghost)
-{
-  return ghostPos(etaBins_, ghost.eta());
-}
+int ghostEtaPos(std::vector<float> etaBins_, fastjet::PseudoJet ghost){return ghostPos(etaBins_, ghost.eta());}
 
-int ghostPhiPos(std::vector<float> phiBins_, fastjet::PseudoJet ghost)
-{
-  return ghostPos(phiBins_, ghost.phi_std());
-}
-
+int ghostPhiPos(std::vector<float> phiBins_, fastjet::PseudoJet ghost){return ghostPos(phiBins_, ghost.phi_std());}
 
 void rescaleGhosts(std::vector<float> rho_, std::vector<float> etaBins_, std::vector<fastjet::PseudoJet>* ghosts)
 {
   for(fastjet::PseudoJet& ighost : (*ghosts)){
     int ghostPos = ghostEtaPos(etaBins_, ighost);
-    //    double pt = (rho_.at(ghostPos))*ighost.area();
+
     double E = (rho_.at(ghostPos))*ighost.area();
     Double_t Et = E/std::cosh(ighost.eta());
     Double_t Px = Et*std::cos(ighost.phi_std());
@@ -96,13 +89,10 @@ void rescaleGhosts(std::vector<float> rho_, std::vector<float> etaBins_, std::ve
     Double_t Pz = Et*std::sinh(ighost.eta());
 
     ighost.reset_momentum(Px, Py, Pz, E);
-
-    //    std::cout << "MASS: " << ighost.m() << std::endl;
   }
 
   return;
 }
-
 
 void getJetsFromParticles(std::vector<float> rho_, std::vector<float> etaBins_, std::vector<fastjet::PseudoJet> particles, std::map<std::string, std::vector<fastjet::PseudoJet> >* jets, std::vector<cppWatch*> cpp)
 {
@@ -129,8 +119,7 @@ void getJetsFromParticles(std::vector<float> rho_, std::vector<float> etaBins_, 
     particles4GeV.push_back(particles[pI]);
   }
 
-  
-  fastjet::ClusterSequenceArea csA(particles, jet_def, area_def);  
+  fastjet::ClusterSequenceArea csA(particles, jet_def, area_def);
   ((*jets)["NoSub"]) = fastjet::sorted_by_pt(csA.inclusive_jets(minJtPt));
 
   fastjet::ClusterSequence cs4(particles4GeV, jet_def);  
@@ -324,7 +313,6 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
     ptEStr = "trk_pt";
     phiStr = "trk_phi";
     etaStr = "trk_eta";
-
     
     truthPtStr = "truth_trk_pt";
     truthEtaStr = "truth_trk_eta";

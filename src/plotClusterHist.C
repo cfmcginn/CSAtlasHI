@@ -6,7 +6,6 @@
 
 //ROOT
 #include "TCanvas.h"
-#include "TDatime.h"
 #include "TF1.h"
 #include "TFile.h"
 #include "TGraphAsymmErrors.h"
@@ -30,7 +29,6 @@ const Int_t colors[nColors] = {0, 1, 3, 4, 6};
 
 const Int_t nStyles = 4;
 const Int_t styles[nStyles] = {24, 25, 28, 46};
-
 
 void configHist(TH1* inHist_p, Int_t pos)
 {
@@ -151,7 +149,8 @@ void plotResponseSet(std::map<std::string, std::string> params, std::vector<TH1*
 
 int plotClusterHist(std::string inFileName, std::string globalStr = "")
 {
-  if(!checkFileExt(inFileName, ".root")) return 1;
+  checkMakeDir check;
+  if(!check.checkFileExt(inFileName, ".root")) return 1;
 
   std::string globalStr2 = globalStr;
   if(globalStr2.size() == 0) globalStr2 = "NoGlobalStr";
@@ -159,14 +158,12 @@ int plotClusterHist(std::string inFileName, std::string globalStr = "")
     globalStr2.replace(globalStr2.find(" "), 1, "");
   }
 
-  TDatime* date = new TDatime();
-  const std::string dateStr = std::to_string(date->GetDate());  
-  delete date;
+  const std::string dateStr = getDateStr();
 
   kirchnerPalette kPal;
 
-  checkMakeDir("pdfDir");
-  checkMakeDir("pdfDir/" + dateStr);
+  check.doCheckMakeDir("pdfDir");
+  check.doCheckMakeDir("pdfDir/" + dateStr);
 
   const Int_t nMaxJtPtBins = 50;
   

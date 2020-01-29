@@ -6,7 +6,6 @@
 #include <vector>
 
 //ROOT
-#include "TDatime.h"
 #include "TDirectoryFile.h"
 #include "TFile.h"
 #include "TH1D.h"
@@ -21,11 +20,13 @@
 #include "include/histDefUtility.h"
 #include "include/plotUtilities.h"
 #include "include/returnRootFileContentsList.h"
+#include "include/stringUtil.h"
 
 int makeClusterHist(std::string inFileName, std::string jzWeightsName = "")
 {
-  if(!checkFileExt(inFileName, "root")) return 1;
-  const bool doJZWeights = checkFileExt(jzWeightsName, "txt");
+  checkMakeDir check;
+  if(!check.checkFileExt(inFileName, "root")) return 1;
+  const bool doJZWeights = check.checkFileExt(jzWeightsName, "txt");
   std::map<std::string, double> weightMap;
   if(doJZWeights){
     std::ifstream inFile(jzWeightsName.c_str());
@@ -88,12 +89,10 @@ int makeClusterHist(std::string inFileName, std::string jzWeightsName = "")
     return 1;
   }
   
-  TDatime* date = new TDatime();
-  const std::string dateStr = std::to_string(date->GetDate());
-  delete date;
+  const std::string dateStr = getDateStr();
 
-  checkMakeDir("output");
-  checkMakeDir("output/" + dateStr);
+  check.doCheckMakeDir("output");
+  check.doCheckMakeDir("output/" + dateStr);
   
   std::string outFileName = inFileName.substr(0, inFileName.find(".root"));
   while(outFileName.find("/") != std::string::npos){outFileName.replace(0, outFileName.find("/")+1, "");}
