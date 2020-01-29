@@ -96,7 +96,7 @@ clean:
 	rm -f include/#*#
 	rm -f input/*~
 	rm -f input/#*#
-	rm -f lib/*.o
+	rm -f lib/*.so
 	rm -rf lib
 	rm -f obj/*.o
 	rm -rf obj
