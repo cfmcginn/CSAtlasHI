@@ -6,7 +6,6 @@
 #include <vector>
 
 //ROOT
-#include "TDatime.h"
 #include "TDirectoryFile.h"
 #include "TFile.h"
 #include "TH1D.h"
@@ -21,12 +20,14 @@
 #include "include/histDefUtility.h"
 #include "include/plotUtilities.h"
 #include "include/returnRootFileContentsList.h"
+#include "include/stringUtil.h"
 
 int makeClusterHist(std::string inFileName, std::string jzWeightsName = "", std::string centWeightsName = "")
 {
-  if(!checkFileExt(inFileName, "root")) return 1;
-  const bool doJZWeights = checkFileExt(jzWeightsName, "txt");
-  const bool doCentWeights = checkFileExt(centWeightsName, "txt");
+  checkMakeDir check;
+  if(!check.checkFileExt(inFileName, "root")) return 1;
+  const bool doJZWeights = check.checkFileExt(jzWeightsName, "txt");
+  const bool doCentWeights = check.checkFileExt(centWeightsName, "txt");
   std::map<std::string, double> jzWeightMap;
   if(doJZWeights){
     std::ifstream inFile(jzWeightsName.c_str());
@@ -109,13 +110,11 @@ int makeClusterHist(std::string inFileName, std::string jzWeightsName = "", std:
     std::cout << "Mismatch between nJtAlgo \'" << nJtAlgo << "\' and jtAlgos.size() \'" << jtAlgos.size() << "\'. return 1" << std::endl;
     return 1;
   }
-  
-  TDatime* date = new TDatime();
-  const std::string dateStr = std::to_string(date->GetDate());
-  delete date;
 
-  checkMakeDir("output");
-  checkMakeDir("output/" + dateStr);
+  const std::string dateStr = getDateStr();
+
+  check.doCheckMakeDir("output");
+  check.doCheckMakeDir("output/" + dateStr);
   
   std::string outFileName = inFileName.substr(0, inFileName.find(".root"));
   while(outFileName.find("/") != std::string::npos){outFileName.replace(0, outFileName.find("/")+1, "");}
