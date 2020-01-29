@@ -13,6 +13,7 @@
 
 //Local
 #include "include/checkMakeDir.h"
+#include "include/getLinBins.h"
 #include "include/histDefUtility.h"
 #include "include/stringUtil.h"
 
@@ -32,6 +33,8 @@ int deriveSampleWeights(std::string inXSectionFileName, std::string inEntriesFil
   check.doCheckMakeDir("output");
   check.doCheckMakeDir("output/" + dateStr);
 
+  std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+
   std::map<std::string, std::vector<double> > jzMapToXSec;
   std::map<std::string, double> jzMapToEntries;
   std::map<std::string, double> jzMapToWeights;
@@ -49,7 +52,10 @@ int deriveSampleWeights(std::string inXSectionFileName, std::string inEntriesFil
   }
   inXSectionFile.close();
 
+  std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+
   if(entriesFileTXT){
+    std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
     std::ifstream inEntriesFile(inEntriesFileName.c_str());
     while(std::getline(inEntriesFile, tempStr)){
       if(tempStr.size() == 0) continue;
@@ -61,8 +67,10 @@ int deriveSampleWeights(std::string inXSectionFileName, std::string inEntriesFil
       jzMapToEntries[tempVect[0]] = std::stod(tempVect[1]);
     }
     inEntriesFile.close();
+    std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
   }
   else{
+    std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
     TFile* inFile_p = new TFile(inEntriesFileName.c_str(), "READ");
     TTree* inTree_p = (TTree*)inFile_p->Get("clusterJetsCS");
     Int_t jzVal_;
@@ -84,8 +92,13 @@ int deriveSampleWeights(std::string inXSectionFileName, std::string inEntriesFil
 
     inFile_p->Close();
     delete inFile_p;
+
+    std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+
   }
   
+  std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+
   double maxWeight = -1.0;
   for(auto const& iter : jzMapToXSec){
     if(jzMapToEntries[iter.first] <= 0) continue;
@@ -105,6 +118,8 @@ int deriveSampleWeights(std::string inXSectionFileName, std::string inEntriesFil
     std::cout << iter.first << ": " << jzMapToWeights[iter.first]/maxWeight << std::endl;
     jzMapToWeights[iter.first] /= maxWeight;
   }
+
+  std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
   
   std::string outFileName = "";
   if(!entriesFileTXT){
@@ -114,9 +129,15 @@ int deriveSampleWeights(std::string inXSectionFileName, std::string inEntriesFil
     }
     outFileName = "output/" + dateStr + "/" + outFileName + "_DerivedWeights_" + dateStr + ".root";
     
+    const Int_t nJtPtBins = 110;
+    Float_t jtPtLow = 20.;
+    Float_t jtPtHigh = 460.;
+    Double_t jtPtBins[nJtPtBins+1];
+    getLinBins(jtPtLow, jtPtHigh, nJtPtBins, jtPtBins);
+    
     TFile* outFile_p = new TFile(outFileName.c_str(), "RECREATE");
-    TH1D* jtpt_h = new TH1D("jtpt_h", ";Jet p_{T} [GeV];Counts", 120, 20, 260);
-    TH1D* jtpt_Weighted_h = new TH1D("jtpt_Weighted_h", ";Jet p_{T} [GeV];Counts (Weighted)", 120, 20, 260);
+    TH1D* jtpt_h = new TH1D("jtpt_h", ";Jet p_{T} [GeV];Counts", nJtPtBins, jtPtBins);
+    TH1D* jtpt_Weighted_h = new TH1D("jtpt_Weighted_h", ";Jet p_{T} [GeV];Counts (Weighted)", nJtPtBins, jtPtBins);
     centerTitles({jtpt_h, jtpt_Weighted_h});
 
     TFile* inFile_p = new TFile(inEntriesFileName.c_str(), "READ");
@@ -152,6 +173,8 @@ int deriveSampleWeights(std::string inXSectionFileName, std::string inEntriesFil
       }
     }
 
+  std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+
     inFile_p->Close();
     delete inFile_p;
 
@@ -173,6 +196,8 @@ int deriveSampleWeights(std::string inXSectionFileName, std::string inEntriesFil
     }
     outFileName = "output/" + dateStr + "/" + outFileName + "_DerivedWeights_" + dateStr + ".root";
   }
+
+  std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 
   outFileName.replace(outFileName.rfind(".root"), 5, "");
   outFileName = outFileName + ".txt";
