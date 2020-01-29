@@ -5,12 +5,16 @@ ifeq "$(GCCVERSION)" "1"
   CXXFLAGS += -Wno-error=misleading-indentation
 endif
 
+ifndef FJCONTRIB__HOME
+$(error FJCONTRIB__HOME is not set at all. Please set this env. variable to point to your contrib package)
+endif
+
 INCLUDE=-I$(PWD)
 LIB=-L$(PWD)/lib
 ROOT=`root-config --cflags --glibs`
 
-FASTJET=`$(FASTJETPATH)/bin/fastjet-config --cxxflags  --libs --plugins --runpath`
-FJCONTRIB=-lConstituentSubtractor  
+FASTJET=`fastjet-config --cxxflags  --libs --plugins --runpath`
+FJCONTRIB=-I$(FJCONTRIB__HOME)/include -L$(FJCONTRIB__HOME)/lib -lConstituentSubtractor  
 
 PYTHIA8=-I$(PYTHIA8PATH)/include -O2 -pedantic -W -Wall -Wshadow -fPIC -L$(PYTHIA8PATH)/lib -Wl,-rpath,$(PYTHIA8PATH)/lib -lpythia8 -ldl
 

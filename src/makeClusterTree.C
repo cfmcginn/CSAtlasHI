@@ -525,7 +525,6 @@ int makeClusterTree(std::string inConfigFileName)
 	  subtractor.set_alpha(alphaParams[aI]);
 	  subtractor.set_remove_all_zero_pt_particles(true);
 	  subtractor.set_max_eta(maxGlobalAbsEta);
-	  subtractor.set_keep_original_masses();
 	  subtracted_particles = subtractor.do_subtraction(realJetConstClean, ghostJetConst);
 
 	  fastjet::PseudoJet subtracted_jet = join(subtracted_particles);
