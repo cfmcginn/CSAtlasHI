@@ -451,13 +451,14 @@ int plotClusterHist(std::string inFileName, std::string globalStr = "")
  
     for(unsigned int jI = 0; jI < jtAlgos.size(); ++jI){
       if(jtAlgos[jI].find("ATLAS") != std::string::npos) continue;
-      if(jtAlgos[jI].find("NoSub") != std::string::npos && cI != periphMostBin) continue;
       if(jtAlgos[jI].find("Truth") != std::string::npos) continue;
 
       std::vector<TH1*> centHistMean, centHistSigma, centHistSigmaOverMean, centHistSigmaEta, centHistSigmaPhi;
 
-      for(unsigned int cI = 0; cI < centBinsStr.size(); ++cI){
-	TCanvas* canvFit_p = new TCanvas("canvFit_p", "", 450*nX, 450*nY);
+      for(Int_t cI = 0; cI < nCentBins; ++cI){
+	if(jtAlgos[jI].find("NoSub") != std::string::npos && cI != periphMostBin) continue;
+
+ 	TCanvas* canvFit_p = new TCanvas("canvFit_p", "", 450*nX, 450*nY);
 	canvFit_p->SetTopMargin(0.01);
 	canvFit_p->SetLeftMargin(0.01);
 	canvFit_p->SetBottomMargin(0.01);
@@ -732,17 +733,12 @@ int plotClusterHist(std::string inFileName, std::string globalStr = "")
 
 
       plotResponseSet(paramMap, centHistMean, centBinsStr, "recoOverGenMean", jtAlgos[jI], dateStr, 0.6, 1.1);
-      //std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
       plotResponseSet(paramMap, centHistSigmaOverMean, centBinsStr, "recoOverGenSigmaOverMean", jtAlgos[jI], dateStr, 0.0, 0.6);
       plotResponseSet(paramMap, centHistSigmaEta, centBinsStr, "recoGenSigma_DeltaEta", jtAlgos[jI], dateStr, 0.0, 0.1);
       plotResponseSet(paramMap, centHistSigmaPhi, centBinsStr, "recoGenSigma_DeltaPhi", jtAlgos[jI], dateStr, 0.0, 0.1);
-      //std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
     }
 
-    //std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
-
-    
-    for(unsigned int cI = 0; cI < centBinsStr.size(); ++cI){
+    for(Int_t cI = 0; cI < nCentBins; ++cI){
       std::vector<TH1*> algoHistMean, algoHistSigma, algoHistSigmaOverMean, algoHistSigmaEta, algoHistSigmaPhi;
       std::vector<std::string> jtAlgosLabel;
       
@@ -766,24 +762,19 @@ int plotClusterHist(std::string inFileName, std::string globalStr = "")
 	jtAlgosLabel.push_back(jtAlgos[jI]);
       }
 
-      //std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
-	
       plotResponseSet(paramMap, algoHistMean, jtAlgosLabel, "recoOverGenMean", centBinsStr[cI], dateStr, 0.6, 1.1);
-      //std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
       plotResponseSet(paramMap, algoHistSigmaOverMean, jtAlgosLabel, "recoOverGenSigmaOverMean", centBinsStr[cI], dateStr, 0.0, 0.6);
 
       plotResponseSet(paramMap, algoHistSigmaEta, jtAlgosLabel, "recoGenSigma_DeltaEta", centBinsStr[cI], dateStr, 0.0, 0.1);
       plotResponseSet(paramMap, algoHistSigmaPhi, jtAlgosLabel, "recoGenSigma_DeltaPhi", centBinsStr[cI], dateStr, 0.0, 0.1);
-      //std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
     }
-    
-    //std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 
     for(unsigned int jI = 0; jI < jtAlgos.size(); ++jI){
       if(jtAlgos[jI].find("ATLAS") != std::string::npos) continue;
-      if(jtAlgos[jI].find("NoSub") != std::string::npos && cI != periphMostBin) continue;
       if(jtAlgos[jI].find("Truth") != std::string::npos) continue;
-      for(unsigned int cI = 0; cI < centBinsStr.size(); ++cI){
+      for(Int_t cI = 0; cI < nCentBins; ++cI){
+	if(jtAlgos[jI].find("NoSub") != std::string::npos && cI != periphMostBin) continue;
+
 	delete recoOverGenMean_p[jI][cI];
 	delete recoOverGenSigma_p[jI][cI];
 	delete recoOverGenSigmaOverMean_p[jI][cI];
@@ -800,7 +791,7 @@ int plotClusterHist(std::string inFileName, std::string globalStr = "")
 
   for(unsigned int jI = 0; jI < jtAlgos.size(); ++jI){
     if(jtAlgos[jI].find("ATLAS") == std::string::npos){
-      for(unsigned int cI = 0; cI < centBinsStr.size(); ++cI){
+      for(Int_t cI = 0; cI < nCentBins; ++cI){
 	if(jtAlgos[jI].find("NoSub") == std::string::npos || cI == periphMostBin){
 	  delete truthEff_p[jI][cI];
 	}
