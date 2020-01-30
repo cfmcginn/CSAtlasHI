@@ -47,7 +47,8 @@ const double ghost_area = 0.01;
 const int active_area_repeats = 1;
 const fastjet::GhostedAreaSpec ghost_spec(maxGlobalAbsEta, active_area_repeats, ghost_area);
 const fastjet::AreaDefinition area_def = fastjet::AreaDefinition(fastjet::active_area_explicit_ghosts, ghost_spec);
-const Float_t minJtPt = 15.;
+const Float_t minRhoJtPt = 15.;
+const Float_t minJtPt = 10.;
 const Float_t maxJtAbsEta = 3.;
 const Float_t maxTrkJtAbsEta = 2.4;
 const Int_t nMaxJets = 500;
@@ -668,7 +669,7 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
 
   //std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 
-  const Int_t nEntries = TMath::Min(25000, (Int_t)clusterTree_p->GetEntries());
+  const Int_t nEntries = TMath::Min(50000, (Int_t)clusterTree_p->GetEntries());
   const Int_t nDiv = TMath::Max(1, nEntries/400);
 
   /*
@@ -862,7 +863,7 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
       //std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 
       fastjet::ClusterSequence cs(towerParticles, jet_def);
-      std::vector<fastjet::PseudoJet> towerJets = fastjet::sorted_by_pt(cs.inclusive_jets(minJtPt));
+      std::vector<fastjet::PseudoJet> towerJets = fastjet::sorted_by_pt(cs.inclusive_jets(minRhoJtPt));
 
       for(unsigned int rI = 0; rI < rho_p->size(); ++rI){
 	rhoOut_p->at(rI) = rho_p->at(rI)/(2.*TMath::Pi()*deltaEta);
@@ -1250,6 +1251,7 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
   paramMap["doTruth"] = std::to_string(doTruth);
 
   paramMap["minJtPt"] = prettyString(minJtPt, 2, false);
+  paramMap["minRhoJtPt"] = prettyString(minRhoJtPt, 2, false);
 
   if(doCalo) paramMap["maxJtAbsEta"] = prettyString(maxJtAbsEta, 2, false);
   else paramMap["maxJtAbsEta"] = prettyString(maxTrkJtAbsEta, 2, false);

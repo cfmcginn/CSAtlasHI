@@ -120,9 +120,9 @@ int makeClusterHist(std::string inFileName, std::string jzWeightsName = "", std:
   while(outFileName.find("/") != std::string::npos){outFileName.replace(0, outFileName.find("/")+1, "");}
   outFileName = "output/" + dateStr + "/" + outFileName + "_HIST_" + dateStr + ".root";
   
-  const Int_t nCentBins = 5;
-  const Int_t centBinsLow[nCentBins] = {0, 10, 20, 30, 40};
-  const Int_t centBinsHigh[nCentBins] = {10, 20, 30, 40, 60};
+  const Int_t nCentBins = 7;
+  const Int_t centBinsLow[nCentBins] = {0, 10, 20, 30, 40, 60, 80};
+  const Int_t centBinsHigh[nCentBins] = {10, 20, 30, 40, 60, 80, 100};
   Int_t nEventPerCent[nCentBins];
   std::vector<std::string> centBinsStr;
   for(Int_t cI = 0; cI < nCentBins; ++cI){
@@ -135,10 +135,6 @@ int makeClusterHist(std::string inFileName, std::string jzWeightsName = "", std:
   const Int_t nJtPtBins = 12;
   Float_t jtPtLow = 30;
   Float_t jtPtHigh = 400;
-  if(isStrSame(caloTrkStr, "trk")){
-    jtPtLow *= 0.7;
-    jtPtHigh *= 0.7;
-  }
   Double_t jtPtBins[nJtPtBins+1];
   getLogBins(jtPtLow, jtPtHigh, nJtPtBins, jtPtBins);
   std::vector<std::string> jtPtBinsStrVect;

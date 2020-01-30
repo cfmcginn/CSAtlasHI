@@ -7,14 +7,19 @@
 #include <string>
 
 //ROOT
+#include "TCanvas.h"
 #include "TFile.h"
 #include "TH1D.h"
+#include "TLegend.h"
+#include "TStyle.h"
 #include "TTree.h"
 
 //Local
 #include "include/checkMakeDir.h"
 #include "include/getLinBins.h"
 #include "include/histDefUtility.h"
+#include "include/kirchnerPalette.h"
+#include "include/plotUtilities.h"
 #include "include/stringUtil.h"
 
 int deriveSampleWeights(std::string inXSectionFileName, std::string inEntriesFileName)
@@ -28,10 +33,15 @@ int deriveSampleWeights(std::string inXSectionFileName, std::string inEntriesFil
     if(!check.checkFileExt(inEntriesFileName, ".root")) return 1;
   }
 
+  kirchnerPalette kPal;
+
   const std::string dateStr = getDateStr();
 
   check.doCheckMakeDir("output");
   check.doCheckMakeDir("output/" + dateStr);
+
+  check.doCheckMakeDir("pdfDir");
+  check.doCheckMakeDir("pdfDir/" + dateStr);
 
   std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 
@@ -115,7 +125,7 @@ int deriveSampleWeights(std::string inXSectionFileName, std::string inEntriesFil
 
   std::cout << "RENORMALIZED WEIGHTS: " << std::endl;
   for(auto const& iter : jzMapToXSec){
-    std::cout << iter.first << ": " << jzMapToWeights[iter.first]/maxWeight << std::endl;
+    std::cout << iter.first << ": " << jzMapToWeights[iter.first]/maxWeight << " (" << jzMapToEntries[iter.first] << ")" << std::endl;
     jzMapToWeights[iter.first] /= maxWeight;
   }
 
@@ -136,8 +146,8 @@ int deriveSampleWeights(std::string inXSectionFileName, std::string inEntriesFil
     getLinBins(jtPtLow, jtPtHigh, nJtPtBins, jtPtBins);
     
     TFile* outFile_p = new TFile(outFileName.c_str(), "RECREATE");
-    TH1D* jtpt_h = new TH1D("jtpt_h", ";Jet p_{T} [GeV];Counts", nJtPtBins, jtPtBins);
-    TH1D* jtpt_Weighted_h = new TH1D("jtpt_Weighted_h", ";Jet p_{T} [GeV];Counts (Weighted)", nJtPtBins, jtPtBins);
+    TH1D* jtpt_h = new TH1D("jtpt_h", ";Jet p_{T} [GeV];Effective Counts", nJtPtBins, jtPtBins);
+    TH1D* jtpt_Weighted_h = new TH1D("jtpt_Weighted_h", ";Jet p_{T} [GeV];Effective Counts (Weighted)", nJtPtBins, jtPtBins);
     centerTitles({jtpt_h, jtpt_Weighted_h});
 
     TFile* inFile_p = new TFile(inEntriesFileName.c_str(), "READ");
@@ -173,12 +183,51 @@ int deriveSampleWeights(std::string inXSectionFileName, std::string inEntriesFil
       }
     }
 
-  std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
-
     inFile_p->Close();
     delete inFile_p;
 
     outFile_p->cd();
+
+    TCanvas* canv_p = new TCanvas("canv_p", "", 450, 450);
+    canv_p->SetTopMargin(0.01);
+    canv_p->SetRightMargin(0.01);
+    canv_p->SetLeftMargin(0.14);
+    canv_p->SetBottomMargin(0.14);
+
+    jtpt_h->SetMarkerColor(1);
+    jtpt_h->SetLineColor(1);
+    jtpt_h->SetMarkerStyle(24);
+    jtpt_h->SetMarkerSize(1);
+
+    jtpt_Weighted_h->SetMarkerColor(kPal.getColor(1));
+    jtpt_Weighted_h->SetLineColor(kPal.getColor(1));
+    jtpt_Weighted_h->SetMarkerStyle(25);
+    jtpt_Weighted_h->SetMarkerSize(1);
+
+    jtpt_h->SetMinimum(getMinGTZero(jtpt_Weighted_h)/2.);
+
+    jtpt_h->DrawCopy("HIST E1 P");
+    jtpt_Weighted_h->DrawCopy("HIST E1 P SAME");
+
+    gPad->SetLogy();
+    gStyle->SetOptStat(0);
+
+    TLegend* leg_p = new TLegend(0.2, 0.2, 0.4, 0.4);
+    leg_p->SetFillStyle(0);
+    leg_p->SetFillColor(0);
+    leg_p->SetBorderSize(0);
+    leg_p->SetTextFont(43);
+    leg_p->SetTextSize(16);
+
+    leg_p->AddEntry(jtpt_h, "Unweighted", "P L");
+    leg_p->AddEntry(jtpt_Weighted_h, "Weighted", "P L");
+
+    leg_p->Draw("SAME");
+
+    std::string saveName = "pdfDir/" + dateStr + "/sampleWeights_" + dateStr + ".pdf";
+    quietSaveAs(canv_p, saveName);
+    delete canv_p;
+    delete leg_p;
 
     jtpt_h->Write("", TObject::kOverwrite);
     delete jtpt_h;
@@ -205,7 +254,7 @@ int deriveSampleWeights(std::string inXSectionFileName, std::string inEntriesFil
   std::ofstream outFile(outFileName.c_str());
 
   for(auto const& iter : jzMapToWeights){
-    outFile << iter.first << "," << iter.second << std::endl;
+    outFile << iter.first << "," << iter.second << " (" << jzMapToEntries[iter.first] << ")" << std::endl;
   }
 
   outFile.close();
