@@ -5,8 +5,16 @@ ifeq "$(GCCVERSION)" "1"
   CXXFLAGS += -Wno-error=misleading-indentation
 endif
 
+define FJCONTRIBERR
+ FJCONTRIB__HOME is not set at all. Please set this environment variable to point to your contrib package. If local, try your fastjet-install, i.e
+export FJCONTRIB__HOME=`fastjet-config --cxxflags`
+If lxplus or acf/rcf, try
+lsetup "lcgenv -p LCG_96b x86_64-centos7-gcc8-opt fjcontrib" 
+and see README for full setup recommendations
+endef
+
 ifndef FJCONTRIB__HOME
-$(error FJCONTRIB__HOME is not set at all. Please set this env. variable to point to your contrib package)
+$(error "$(FJCONTRIBERR)")	
 endif
 
 INCLUDE=-I$(PWD)
