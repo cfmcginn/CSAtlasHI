@@ -14,7 +14,8 @@
 globalDebugHandler::globalDebugHandler()
 {
   m_doGlobalDebug = false;
-  std::string doGlobalDebugStr = gSystem->Getenv(envVarStr.c_str());
+  std::string doGlobalDebugStr = "";
+  if(gSystem->Getenv(envVarStr.c_str()) != nullptr) doGlobalDebugStr = gSystem->Getenv(envVarStr.c_str());
   if(doGlobalDebugStr.size() != 1){
     std::cout << "ERROR IN GLOBALDEBUGHANDLER: Environment variable \'" << envVarStr << "\' is not defined correctly in scope. Currently \'" << doGlobalDebugStr << "\'. Please set to 0 or 1. defaulting to false" << std::endl;
   }
@@ -22,7 +23,7 @@ globalDebugHandler::globalDebugHandler()
     std::cout << "ERROR IN GLOBALDEBUGHANDLER: Environment variable \'" << envVarStr << "\' is not defined correctly in scope. Currently \'" << doGlobalDebugStr << "\'. Please set to 0 or 1. defaulting to false" << std::endl;
   }
   else m_doGlobalDebug = std::stoi(doGlobalDebugStr);
-  
+
   return;
 }
 

@@ -18,6 +18,7 @@
 //Local
 #include "include/checkMakeDir.h"
 #include "include/getLinBins.h"
+#include "include/globalDebugHandler.h"
 #include "include/histDefUtility.h"
 #include "include/kirchnerPalette.h"
 #include "include/plotUtilities.h"
@@ -28,6 +29,9 @@ int deriveSampleWeights(std::string inXSectionFileName, std::string inEntriesFil
 {
   checkMakeDir check;
   if(!check.checkFileExt(inXSectionFileName, ".txt")) return 1;
+
+  globalDebugHandler gBug;
+  const bool doGlobalDebug = gBug.GetDoGlobalDebug();
 
   const std::string rootExt = ".root";
   const std::string txtExt = ".txt";
@@ -79,18 +83,13 @@ int deriveSampleWeights(std::string inXSectionFileName, std::string inEntriesFil
       if(tempVect.size() == 0) continue;
       if(tempVect[0].size() == 0) continue;
       if(tempVect[0].substr(0,1).find("#") != std::string::npos) continue;
-   
-      std::cout << tempVect[1] << std::endl;
-   
+      
       globalTxtVect.push_back(tempVect);
       if(tempVect[1].rfind(".") != std::string::npos){
 	if(isStrSame(rootExt, tempVect[1].substr(tempVect[1].rfind("."), rootExt.size()))) inIsROOT = true;
       }
-      //      jzMapToEntries[tempVect[0]] = std::stod(tempVect[1]);
     }
     inEntriesFile.close();
-
-    std::cout << "ROOT " << inIsROOT << std::endl;
 
     for(unsigned int gI = 0; gI < globalTxtVect.size(); ++gI){
       if(!inIsROOT) jzMapToEntries[globalTxtVect[gI][0]] = std::stod(globalTxtVect[gI][1]); 
@@ -151,7 +150,7 @@ int deriveSampleWeights(std::string inXSectionFileName, std::string inEntriesFil
     }   
   }
   else{
-    std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+    if(doGlobalDebug) std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
     TFile* inFile_p = new TFile(inEntriesFileName.c_str(), "READ");
     TTree* inTree_p = (TTree*)inFile_p->Get("clusterJetsCS");
     Int_t jzVal_;
@@ -177,17 +176,18 @@ int deriveSampleWeights(std::string inXSectionFileName, std::string inEntriesFil
     inFile_p->Close();
     delete inFile_p;
 
-    std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+    if(doGlobalDebug) std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 
   }
   
-  std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+  if(doGlobalDebug) std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 
+  std::cout << "SAMPLE, X-SECTION, FILTER EFF., NUMBER EVENTS" << std::endl;
   double maxWeight = -1.0;
   for(auto const& iter : jzMapToXSec){
     if(jzMapToEntries[iter.first] <= 0) continue;
 
-    std::cout << iter.first << ", " << iter.second[0] << ", " << iter.second[1] << ", " << jzMapToEntries[iter.first] << std::endl;
+    std::cout << iter.first << ", " << iter.second[0] << ", " << iter.second[1] << ", " << prettyString(jzMapToEntries[iter.first], 1, false) << std::endl;
 
     jzMapToWeights[iter.first] = iter.second[0]*iter.second[1]/jzMapToEntries[iter.first];
     if(maxWeight < jzMapToWeights[iter.first]) maxWeight = jzMapToWeights[iter.first];
@@ -199,11 +199,11 @@ int deriveSampleWeights(std::string inXSectionFileName, std::string inEntriesFil
 
   std::cout << "RENORMALIZED WEIGHTS: " << std::endl;
   for(auto const& iter : jzMapToXSec){
-    std::cout << iter.first << ": " << jzMapToWeights[iter.first]/maxWeight << " (" << jzMapToEntries[iter.first] << ")" << std::endl;
+    std::cout << iter.first << ": " << jzMapToWeights[iter.first]/maxWeight << " (N_Evt=" << prettyString(jzMapToEntries[iter.first], 1, false) << ")" << std::endl;
     jzMapToWeights[iter.first] /= maxWeight;
   }
 
-  std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+  if(doGlobalDebug) std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
   
   std::string outFileName = "";
   if(!entriesFileTXT || inIsROOT){
@@ -359,7 +359,7 @@ int deriveSampleWeights(std::string inXSectionFileName, std::string inEntriesFil
     outFileName = "output/" + dateStr + "/" + outFileName + "_DerivedWeights_" + dateStr + rootExt;
   }
 
-  std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+  if(doGlobalDebug) std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 
   outFileName.replace(outFileName.rfind(rootExt), 5, "");
   outFileName = outFileName + txtExt;
