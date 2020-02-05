@@ -92,7 +92,7 @@ bin/deriveCentWeights.exe: src/deriveCentWeights.C
 	$(CXX) $(CXXFLAGS) src/deriveCentWeights.C $(INCLUDE) $(ROOT) $(LIB) -lCSATLAS -o bin/deriveCentWeights.exe
 
 bin/validateRho.exe: src/validateRho.C
-	$(CXX) $(CXXFLAGS) src/validateRho.C $(INCLUDE) $(ROOT) $(LIB) -lCSATLAS -o bin/validateRho.exe
+	$(CXX) $(CXXFLAGS) src/validateRho.C $(INCLUDE) $(ROOT) $(FASTJET) $(LIB) -lCSATLAS -o bin/validateRho.exe
 
 clean:
 	rm -f ./*~

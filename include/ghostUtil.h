@@ -1,6 +1,13 @@
 #ifndef GHOSTUTIL_H
 #define GHOSTUTIL_H
 
+//cpp
+#include <iostream>
+#include <vector>
+
+//fastjet
+#include "fastjet/PseudoJet.hh"
+
 inline int ghostPos(std::vector<float> bins_, double ghostVal)
 {
   if(bins_.size() == 0){

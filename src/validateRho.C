@@ -1,6 +1,6 @@
 //Author: Chris McGinn (2020.02.05)
 
-//cpp
+//c+cpp
 #include <iostream>
 #include <map>
 #include <string>
@@ -12,6 +12,8 @@
 
 //Local
 #include "include/checkMakeDir.h"
+#include "include/ghostUtil.h"
+#include "include/globalDebugHandler.h"
 #include "include/stringUtil.h"
 
 int validateRho(std::string rhoFileName, std::string inFileName)
@@ -20,9 +22,25 @@ int validateRho(std::string rhoFileName, std::string inFileName)
   if(!check.checkFileExt(rhoFileName, ".root")) return 1;
   if(!check.checkFileExt(inFileName, ".root")) return 1;
 
+  //DEBUG BOOL FROM ENV VAR
+  globalDebugHandler gBug;
+  const bool doGlobalDebug = gBug.GetDoGlobalDebug();
+
+  if(doGlobalDebug) std::cout << "GLOBAL DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+  
   const std::string dateStr = getDateStr();
   check.doCheckMakeDir("output");
   check.doCheckMakeDir("output/" + dateStr);
+  
+  const std::string outFileName = "output/" + dateStr + "/validateRho_" + dateStr + ".root";
+  TFile* outFile_p = new TFile(outFileName.c_str(), "RECREATE");
+  TTree* outTree_p = new TTree("validateRhoTree", "");  
+
+  std::vector<float>* etRecalc_p = new std::vector<float>;
+  std::vector<float>* etATLAS_p = new std::vector<float>;
+
+  outTree_p->Branch("etRecalc", &etRecalc_p);
+  outTree_p->Branch("etATLAS", &etATLAS_p);
   
   Int_t run_, evt_;
   UInt_t lumi_;
@@ -35,6 +53,7 @@ int validateRho(std::string rhoFileName, std::string inFileName)
   std::vector<float>* towers_eta_p=nullptr;
   std::vector<float>* towers_phi_p=nullptr;
 
+  if(doGlobalDebug) std::cout << "GLOBAL DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
   std::map<std::string, ULong64_t> runLumiEvtToRhoEntry;
   
   TFile* rhoFile_p = new TFile(rhoFileName.c_str(), "READ");
@@ -85,26 +104,32 @@ int validateRho(std::string rhoFileName, std::string inFileName)
   inTree_p->SetBranchAddress("towers_phi", &towers_phi_p);
   inTree_p->SetBranchAddress("towers_eta", &towers_eta_p);
 
-  std::vector<float> perEtaEnergySum;  
+  if(doGlobalDebug) std::cout << "GLOBAL DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
   std::vector<float> fullEtaBins;
-  inTree_p->GetEntry(0);
+  rhoTree_p->GetEntry(0);
   for(unsigned int eI = 0; eI < etaMin_p->size(); ++eI){
-    perEtaEnergySum.push_back(0.0);
+    etRecalc_p->push_back(0.0);
+    etATLAS_p->push_back(0.0);
     fullEtaBins.push_back(etaMin_p->at(eI));
   }
+  if(doGlobalDebug) std::cout << "GLOBAL DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
   fullEtaBins.push_back(etaMax_p->at(etaMax_p->size()-1));
+
+  if(doGlobalDebug) std::cout << "GLOBAL DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 
   std::cout << "ETABINS: ";
   for(unsigned int eI = 0; eI < fullEtaBins.size(); ++eI){
     std::cout << fullEtaBins[eI] << ", ";
   }
   std::cout << std::endl;
-  
+
+  if(doGlobalDebug) std::cout << "GLOBAL DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
   const ULong64_t nEntries = inTree_p->GetEntries();
   for(ULong64_t entry = 0; entry < nEntries; ++entry){
     inTree_p->GetEntry(entry);
 
     std::string runLumiEvtStr = std::to_string(run_) + "_" + std::to_string(lumi_) + "_" + std::to_string(evt_);
+    if(doGlobalDebug) std::cout << "GLOBAL DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 
     if(runLumiEvtToRhoEntry.count(runLumiEvtStr) == 0){
       std::cout << "CANNOT FIND ENTRY (Run_Lumi_Evt) " << runLumiEvtStr << ", continue" << std::endl;
@@ -114,11 +139,24 @@ int validateRho(std::string rhoFileName, std::string inFileName)
 
     rhoTree_p->GetEntry(rhoEntry);
 
-    for(unsigned int eI = 0; eI < etaMin_p->size(); ++eI){perEtaEnergySum[eI] = 0.0;}
+    if(doGlobalDebug) std::cout << "GLOBAL DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+    
+    for(unsigned int eI = 0; eI < etaMin_p->size(); ++eI){
+      etATLAS_p->at(eI) = et_p->at(eI);
+      etRecalc_p->at(eI) = 0.0;
+    }
+
+    if(doGlobalDebug) std::cout << "GLOBAL DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 
     for(unsigned int tI = 0; tI < towers_pt_p->size(); ++tI){
-      
+      int etaPos = ghostPos(fullEtaBins, towers_eta_p->at(tI));
+      etRecalc_p->at(etaPos) += towers_pt_p->at(tI);
     }
+
+    if(doGlobalDebug) std::cout << "GLOBAL DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+
+
+    outTree_p->Fill();
   }
   
   inFile_p->Close();
@@ -127,6 +165,15 @@ int validateRho(std::string rhoFileName, std::string inFileName)
   rhoFile_p->Close();
   delete rhoFile_p;
 
+  outFile_p->cd();
+
+  outTree_p->Write("", TObject::kOverwrite);
+  delete outTree_p;
+  
+  outFile_p->Close();
+  delete outFile_p;
+
+  if(doGlobalDebug) std::cout << "GLOBAL DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
   std::cout << "VALIDATE RHO COMPLETE. return 0" << std::endl;
   return 0;
 }
