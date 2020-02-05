@@ -27,6 +27,7 @@
 #include "include/configParser.h"
 #include "include/constituentBuilder.h"
 #include "include/cppWatch.h"
+#include "include/ghostUtil.h"
 #include "include/globalDebugHandler.h"
 #include "include/plotUtilities.h"
 #include "include/returnRootFileContentsList.h"
@@ -71,37 +72,6 @@ void fillArrays(std::vector<float>* jetPts_p, std::vector<float>* jetEtas_p, std
   
   return;
 }
-
-int ghostPos(std::vector<float> bins_, double ghostVal)
-{
-  if(bins_.size() == 0){
-    std::cout << "MAKECLUSTERTREE GHOSTPOS ERROR: Given bins have size \'0\'. returning int32 max for absurd result" << std::endl;
-    return 2147483647;//lol
-  }
-
-  int ghostPos = -1;
-  if(ghostVal<=bins_.at(0)){
-    std::cout << "WARNING MAKECLUSTERTREE GHOSTPOS: Given value \'" << ghostVal << "\' falls below binning (low edge \'" << bins_[0] << "\'). return pos 0" << std::endl;
-    ghostPos = 0;
-  }
-  else if(ghostVal>=bins_.at(bins_.size()-1)){
-    ghostPos = bins_.size()-2;//-2 because etabins are 1 greater than rhobins
-    std::cout << "WARNING MAKECLUSTERTREE GHOSTPOS: Given value \'" << ghostVal << "\' is above binning (high edge \'" << bins_[bins_.size()-1] << "\'). return pos " << bins_.size()-2 << ", " << bins_[bins_.size()-2] << "-" << bins_[bins_.size()-1] << std::endl;
-  }
-  else{
-    for(unsigned int ie = 0; ie < bins_.size()-1; ++ie){
-      if(ghostVal>=bins_.at(ie) && ghostVal<bins_.at(ie+1)){
-        ghostPos = ie;
-        break;
-      }
-    }
-  }
-  return ghostPos;
-}
-
-int ghostEtaPos(std::vector<float> etaBins_, fastjet::PseudoJet ghost){return ghostPos(etaBins_, ghost.eta());}
-
-int ghostPhiPos(std::vector<float> phiBins_, fastjet::PseudoJet ghost){return ghostPos(phiBins_, ghost.phi_std());}
 
 void rescaleGhosts(std::vector<float> rho_, std::vector<float> etaBins_, std::vector<fastjet::PseudoJet>* ghosts)
 {

@@ -33,6 +33,7 @@
 #include "include/checkMakeDir.h"
 #include "include/cppWatch.h"
 #include "include/etaPhiFunc.h"
+#include "include/ghostUtil.h"
 #include "include/plotUtilities.h"
 #include "include/stringUtil.h"
 
@@ -56,27 +57,6 @@ const Float_t deltaEta = 0.1;
 
 const std::vector<std::string> baseCS = {"CSJetByJet", "CSGlobal", "CSGlobalIter"};
 const std::vector<int> alphaParams = {1};
-
-int ghostPos(std::vector<float> bins_, double ghostVal)
-{
-  int ghostPos = -1;
-  if(ghostVal<=bins_.at(0)) ghostPos = 0;
-  else if(ghostVal>=bins_.at(bins_.size()-1)) ghostPos = bins_.size()-2;//-2 because etabins are 1 greater than rhobins
-  else{
-    for(unsigned int ie = 0; ie < bins_.size()-1; ++ie){
-      if(ghostVal>=bins_.at(ie) && ghostVal<bins_.at(ie+1)){
-	ghostPos = ie;
-	break;
-      }
-    }
-  }
-  
-  return ghostPos;
-}
-
-int ghostEtaPos(std::vector<float> etaBins_, fastjet::PseudoJet ghost){return ghostPos(etaBins_, ghost.eta());}
-
-int ghostPhiPos(std::vector<float> phiBins_, fastjet::PseudoJet ghost){return ghostPos(phiBins_, ghost.phi_std());}
 
 void rescaleGhosts(std::vector<float> rho_, std::vector<float> etaBins_, std::vector<fastjet::PseudoJet>* ghosts)
 {
