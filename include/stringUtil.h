@@ -177,7 +177,9 @@ inline std::string getDateStr()
   std::tm *ltm = std::localtime(&now);
   std::string dateStr = std::to_string(1+ltm->tm_mon);
   if(dateStr.size() == 1) dateStr = "0" + dateStr;
-  dateStr = std::to_string(1900 + ltm->tm_year) + dateStr + std::to_string(ltm->tm_mday);
+  std::string dayStr = std::to_string(ltm->tm_mday);
+  if(dayStr.size() == 1) dayStr = "0" + dayStr;
+  dateStr = std::to_string(1900 + ltm->tm_year) + dateStr + dayStr;
 
   return dateStr;
 }

@@ -38,7 +38,7 @@ std::string prettyString(double inVal, const int prec, const bool doDot)
   while(retStr.find(".") < retStr.size()-1-prec){retStr.replace(retStr.size()-1, 1,"");}
   if(doDot) retStr.replace(retStr.find("."), 1, "p");
 
-  if(minStr.size() != 0) retStr = minStr + retStr.substr(0, retStr.size()-1);
+  if(minStr.size() != 0) retStr = minStr + retStr.substr(0, retStr.size());
   if(retStr.substr(0,1).find("p") != std::string::npos) retStr = "0" + retStr;
   if(retStr.substr(0,1).find(".") != std::string::npos) retStr = "0" + retStr;
   if(retStr.substr(0,2).find("-p") != std::string::npos) retStr = "-0" + retStr.substr(1, retStr.size());

@@ -7,6 +7,7 @@
 #include <vector>
 
 //ROOT
+#include "TEnv.h"
 #include "TFile.h"
 #include "TTree.h"
 
@@ -14,6 +15,7 @@
 #include "include/checkMakeDir.h"
 #include "include/ghostUtil.h"
 #include "include/globalDebugHandler.h"
+#include "include/plotUtilities.h"
 #include "include/stringUtil.h"
 
 int validateRho(std::string rhoFileName, std::string inFileName)
@@ -155,7 +157,6 @@ int validateRho(std::string rhoFileName, std::string inFileName)
 
     if(doGlobalDebug) std::cout << "GLOBAL DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 
-
     outTree_p->Fill();
   }
   
@@ -169,6 +170,19 @@ int validateRho(std::string rhoFileName, std::string inFileName)
 
   outTree_p->Write("", TObject::kOverwrite);
   delete outTree_p;
+
+  //store some config info in file
+  std::string etaMinStr = "";
+  std::string etaMaxStr = "";
+  for(unsigned int eI = 0; eI < etaMin_p->size(); ++eI){
+    etaMinStr = etaMinStr + prettyString(etaMin_p->at(eI), 1, false) + ",";
+    etaMaxStr = etaMaxStr + prettyString(etaMax_p->at(eI), 1, false) + ",";
+  }
+
+  TEnv configEnv;
+  configEnv.SetValue("etaMin", etaMinStr.c_str());
+  configEnv.SetValue("etaMax", etaMaxStr.c_str());
+  configEnv.Write("config", TObject::kOverwrite);
   
   outFile_p->Close();
   delete outFile_p;
