@@ -171,6 +171,16 @@ inline std::vector<std::string> strToVect(std::string inStr)
   return retVect;
 }
 
+inline std::vector<float> strToVectF(std::string inStr)
+{  
+  std::vector<float> retVect;
+  std::vector<std::string> strVect = strToVect(inStr);
+  for(auto const & iter : strVect){
+    retVect.push_back(std::stod(iter));
+  }  
+  return retVect;
+}
+
 inline std::string getDateStr()
 {
   std::time_t now = time(0);

@@ -180,8 +180,8 @@ int validateRho(std::string rhoFileName, std::string inFileName)
   }
 
   TEnv configEnv;
-  configEnv.SetValue("etaMin", etaMinStr.c_str());
-  configEnv.SetValue("etaMax", etaMaxStr.c_str());
+  configEnv.SetValue("ETAMINBINS", etaMinStr.c_str());
+  configEnv.SetValue("ETAMAXBINS", etaMaxStr.c_str());
   configEnv.Write("config", TObject::kOverwrite);
   
   outFile_p->Close();

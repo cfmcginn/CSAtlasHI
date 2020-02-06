@@ -14,37 +14,34 @@
 
 std::string prettyString(double inVal, const int prec, const bool doDot)
 {
+  const int maxPrec = 18;
+  if(prec > maxPrec){
+    std::cout << "PRETTYSTRING ERROR: CANNOT HANDLE REQUESTED PRECISION \'" << prec << "\', max is \'" << maxPrec << "\'. return empty string" << std::endl;
+    return "";
+  }
+
   std::string minStr = "";
   if(inVal < 0) minStr = "-";
   inVal = TMath::Abs(inVal);
   std::string retStr = "";
-  if(inVal < 1.){
-    inVal *= TMath::Power(10, prec);
-    retStr = std::to_string(inVal);
-    //  retStr = retStr.substr(0, 8) + "." + retStr.substr(8, retStr.size());
-
-    for(int i = 0; i < prec; ++i){
-      int pos = retStr.find(".");
-
-      if(pos == 0) retStr = ".0" + retStr.substr(1, retStr.size());
-      else retStr = retStr.substr(0, pos-1) + "." + retStr.substr(pos-1, 1) + retStr.substr(pos+1, retStr.size());
-    }
-  }
-  else retStr = std::to_string(inVal);
-
-  if(retStr.find(".") == std::string::npos) retStr = retStr + ".";
   
-  while(retStr.size() < (unsigned int)(prec+1)){retStr = retStr + "0";}
-  while(retStr.find(".") < retStr.size()-1-prec){retStr.replace(retStr.size()-1, 1,"");}
-  if(doDot) retStr.replace(retStr.find("."), 1, "p");
+  inVal *= TMath::Power(10, prec);
 
-  if(minStr.size() != 0) retStr = minStr + retStr.substr(0, retStr.size());
-  if(retStr.substr(0,1).find("p") != std::string::npos) retStr = "0" + retStr;
+  unsigned long long tempInVal = inVal;
+  if(inVal - tempInVal > 0.5) ++tempInVal;
+  retStr = std::to_string(tempInVal);
+  
+  retStr = retStr.substr(0, retStr.size()-prec) + "." + retStr.substr(retStr.size()-prec, prec);
+
   if(retStr.substr(0,1).find(".") != std::string::npos) retStr = "0" + retStr;
-  if(retStr.substr(0,2).find("-p") != std::string::npos) retStr = "-0" + retStr.substr(1, retStr.size());
-  if(retStr.substr(0,2).find("-.") != std::string::npos) retStr = "-0" + retStr.substr(1, retStr.size());
-  
-  return retStr;
+  if(retStr.substr(retStr.size()-1,1).find(".") != std::string::npos) retStr.replace(retStr.size()-1, 1, "");
+
+  if(doDot){
+    if(retStr.find(".") != std::string::npos) retStr.replace(retStr.find("."), 1, "p");
+    if(minStr.size() != 0) minStr = "Neg";
+  }
+    
+  return minStr + retStr;
 }
 
 std::string prettyStringE(const double inVal, const int prec, const bool doDot)
