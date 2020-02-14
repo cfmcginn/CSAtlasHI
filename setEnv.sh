@@ -29,11 +29,13 @@ fi
 #Will still return path that LOCALFJPATH should be set to below if fastjet is in fact installed and in path
 
 LOCALFJPATH=/home/cfmcginn/Packages/FastJet/fastjet-install
-ISLXPORACF=0
+ISLXPORACF=1
 
 if [[ $ISLXPORACF -eq 1 ]]
 then
     setupATLAS
+    lsetup "root 6.18.04-x86_64-centos7-gcc8-opt" #root6 distribution
+    lsetup "root 6.18.04-x86_64-centos7-gcc8-opt" #root6 distribution    
 fi
 
 if [[ $ISFASTJETGOOD -eq 0 ]]
@@ -48,15 +50,17 @@ then
 	    ISFASTJETGOOD=$(echo $fastjetStr | grep "\-I" | wc -l)
 	else
 	    echo "Given '$LOCALFJPATH' is not a valid directory. Please fix"
-	fi
-	
-	if [[ $ISFASTJETGOOD -eq 0 ]]
-	then
-	    echo "FastJet not currently in system path, AND '$LOCALFJPATH' provided does not lead to fastjet-config needed. please fix"
-	fi
+	fi	
     else
 	lsetup "lcgenv -p LCG_96b x86_64-centos7-gcc8-opt fastjet"
+	fastjetStr=$(fastjet-config --cxxflags)
+	ISFASTJETGOOD=$(echo $fastjetStr | grep "\-I" | wc -l)
     fi
+    
+    if [[ $ISFASTJETGOOD -eq 0 ]]
+    then
+	echo "FastJet not currently in system path, AND '$LOCALFJPATH' provided does not lead to fastjet-config needed. please fix"
+    fi    
 fi
 
 if [[ $ISFASTJETGOOD -eq 1 ]]
