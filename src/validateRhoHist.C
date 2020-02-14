@@ -32,13 +32,11 @@ int validateRhoHist(std::string inFileName)
   TFile* inFile_p = new TFile(inFileName.c_str(), "READ");
   TTree* inTree_p = (TTree*)inFile_p->Get("validateRhoTree");  
 
+  Int_t cent_;
   std::vector<float>* etATLAS_p=nullptr;
   std::vector<float>* etRecalc_p=nullptr;
 
-  inTree_p->SetBranchStatus("*", 0);
-  inTree_p->SetBranchStatus("etATLAS", 1);
-  inTree_p->SetBranchStatus("etRecalc", 1);
-
+  inTree_p->SetBranchAddress("cent", &cent_);
   inTree_p->SetBranchAddress("etATLAS", &etATLAS_p);
   inTree_p->SetBranchAddress("etRecalc", &etRecalc_p);
 
@@ -68,6 +66,11 @@ int validateRhoHist(std::string inFileName)
   }
   etaBins[nEtaBins] = etaMaxBins[etaMaxBins.size()-1];
 
+  const Int_t nCentBins = 100;
+  Double_t centBins[nCentBins+1];
+  getLinBins(-0.5, 99.5, nCentBins, centBins);
+
+  
   const Int_t nDeltaRhoBins = 100;
   const Float_t rhoLow = -20;
   const Float_t rhoHigh = 20;
@@ -78,8 +81,9 @@ int validateRhoHist(std::string inFileName)
   TFile* outFile_p = new TFile(outFileName.c_str(), "RECREATE");
   TH1D* deltaEt_p = new TH1D("deltaEt_h", ";#Sigma(E_{T})_{Recalc.} - #Sigma(E_{T})_{ATLAS} [GeV];Counts", nDeltaRhoBins, deltaRhoBins);
   TH2D* deltaEtVEta_p = new TH2D("deltaEtVEta_h", ";#eta;#Sigma(E_{T})_{Recalc.} - #Sigma(E_{T})_{ATLAS} [GeV]", nEtaBins, etaBins, nDeltaRhoBins, deltaRhoBins);
+  TH2D* deltaEtVCent_p = new TH2D("deltaEtVCent_h", ";Centrality (%);#Sigma(E_{T})_{Recalc.} - #Sigma(E_{T})_{ATLAS} [GeV]", nCentBins, centBins, nDeltaRhoBins, deltaRhoBins);
   centerTitles(deltaEt_p);
-  centerTitles(deltaEtVEta_p);
+  centerTitles({deltaEtVEta_p, deltaEtVCent_p});
   
   const ULong64_t nEntries = inTree_p->GetEntries();
   for(ULong64_t entry = 0; entry < nEntries; ++entry){
@@ -91,13 +95,14 @@ int validateRhoHist(std::string inFileName)
     }
 
     for(unsigned int eI = 0; eI < etRecalc_p->size(); ++eI){      
-      double cent = (etaMinBins.at(eI) + etaMaxBins.at(eI))/2.;
+      double etaCent = (etaMinBins.at(eI) + etaMaxBins.at(eI))/2.;
       double val = etRecalc_p->at(eI) - etATLAS_p->at(eI);      
       if(val <= rhoLow) val = (deltaRhoBins[0] + deltaRhoBins[1])/2.;
       if(val >= rhoHigh) val = (deltaRhoBins[nDeltaRhoBins-1] + deltaRhoBins[nDeltaRhoBins])/2.;
 
       deltaEt_p->Fill(val);
-      deltaEtVEta_p->Fill(cent, val);
+      deltaEtVEta_p->Fill(etaCent, val);
+      deltaEtVCent_p->Fill(cent_, val);
     }
   }  
 
@@ -108,6 +113,9 @@ int validateRhoHist(std::string inFileName)
 
   deltaEtVEta_p->Write("", TObject::kOverwrite);
   delete deltaEtVEta_p;
+
+  deltaEtVCent_p->Write("", TObject::kOverwrite);
+  delete deltaEtVCent_p;
 
   outFile_p->Close();
   delete outFile_p;

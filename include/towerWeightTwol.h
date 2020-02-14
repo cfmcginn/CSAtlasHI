@@ -7,23 +7,33 @@
 #define TOWERWEIGHTTWOL_H
 
 //c+cpp
-#include <iostream>
 #include <string>
 
 //ROOT
 #include "TFile.h"
-#include "TH3D.h"
+#include "TH3F.h"
+
+//Local
+#include "include/checkMakeDir.h"
 
 class towerWeightTwol{
  public:
   towerWeightTwol(){};
+  towerWeightTwol(std::string inWeightFileName);  
   ~towerWeightTwol();
   
+  Bool_t Init(std::string inWeightFileName);
+  Float_t GetEtaPhiResponse(Float_t eta, Float_t phi, Int_t runNumber);
+  void Clean();
+  
  private:
-  std::string m_inFileName;
+  checkMakeDir check;
+  
+  std::string m_weightFileName;
   const std::string m_histName = "h3_w"; 
 
-  TH3D* h3_w_p = nullptr;
+  TFile* m_weightFile_p = nullptr;
+  TH3F* m_h3_w_p = nullptr;
 };
 
 #endif

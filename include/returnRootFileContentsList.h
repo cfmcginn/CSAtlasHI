@@ -16,14 +16,14 @@
 //Local (Utility) dependencies
 #include "include/stringUtil.h"
 
-const std::string tdirStr = "TDirectoryFile";
+inline std::vector<std::string> returnTDirContentsList(TFile*, const std::string, const std::string, const std::string, const Int_t currentLayers, const Int_t nLayersCap, std::vector<std::string>* classList);
 
-std::vector<std::string> returnTDirContentsList(TFile*, const std::string, const std::string, const std::string, const Int_t currentLayers, const Int_t nLayersCap, std::vector<std::string>* classList);
+inline TList* returnTDirContentsList(TFile* inFile_p, const std::string dirName, const Int_t currentLayers, const Int_t nLayersCap);
 
-TList* returnTDirContentsList(TFile* inFile_p, const std::string dirName, const Int_t currentLayers, const Int_t nLayersCap);
-
-std::vector<std::string> returnRootFileContentsList(TFile *inFile_p, const std::string classFilter = "", const std::string nameFilter = "", const Int_t nLayersCap = -1, std::vector<std::string>* classList = NULL)
+inline std::vector<std::string> returnRootFileContentsList(TFile *inFile_p, const std::string classFilter = "", const std::string nameFilter = "", const Int_t nLayersCap = -1, std::vector<std::string>* classList = NULL)
 {
+  const std::string tdirStr = "TDirectoryFile";
+
   inFile_p->cd();
 
   std::vector<std::string> returnList;
@@ -62,9 +62,10 @@ std::vector<std::string> returnRootFileContentsList(TFile *inFile_p, const std::
   return returnList;
 }
 
-
-std::vector<std::string> returnTDirContentsList(TFile* inFile_p, const std::string dirName, const std::string classFilter, const std::string nameFilter, const Int_t currentLayers, const Int_t nLayersCap = -1, std::vector<std::string>* classList = NULL)
+inline std::vector<std::string> returnTDirContentsList(TFile* inFile_p, const std::string dirName, const std::string classFilter, const std::string nameFilter, const Int_t currentLayers, const Int_t nLayersCap = -1, std::vector<std::string>* classList = NULL)
 {
+  const std::string tdirStr = "TDirectoryFile";
+
   inFile_p->cd();
 
   std::vector<std::string> returnList;
@@ -105,11 +106,10 @@ std::vector<std::string> returnTDirContentsList(TFile* inFile_p, const std::stri
   return returnList;
 }
 
-
-
 //TList versions
-TList* returnRootFileContentsList(TFile *inFile_p, const Int_t nLayersCap = -1)
+inline TList* returnRootFileContentsList(TFile *inFile_p, const Int_t nLayersCap = -1)
 {
+  const std::string tdirStr = "TDirectoryFile";
   inFile_p->cd();
 
   TList* returnList = inFile_p->GetListOfKeys();
@@ -134,9 +134,9 @@ TList* returnRootFileContentsList(TFile *inFile_p, const Int_t nLayersCap = -1)
   return returnList;
 }
 
-
-TList* returnTDirContentsList(TFile* inFile_p, const std::string dirName, const Int_t currentLayers, const Int_t nLayersCap = -1)
+inline TList* returnTDirContentsList(TFile* inFile_p, const std::string dirName, const Int_t currentLayers, const Int_t nLayersCap = -1)
 {
+  const std::string tdirStr = "TDirectoryFile";
   inFile_p->cd();
 
   TList* returnList = NULL;

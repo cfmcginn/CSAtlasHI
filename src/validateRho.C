@@ -12,6 +12,7 @@
 #include "TTree.h"
 
 //Local
+#include "include/centralityFromInput.h"
 #include "include/checkMakeDir.h"
 #include "include/ghostUtil.h"
 #include "include/globalDebugHandler.h"
@@ -24,6 +25,10 @@ int validateRho(std::string rhoFileName, std::string inFileName)
   if(!check.checkFileExt(rhoFileName, ".root")) return 1;
   if(!check.checkFileExt(inFileName, ".root")) return 1;
 
+  const std::string centFileName = "input/centrality_cuts_Gv32_proposed_RCMOD2.txt";
+  if(!check.checkFileExt(centFileName, ".txt")) return 1;
+  centralityFromInput centTable(centFileName);  
+  
   //DEBUG BOOL FROM ENV VAR
   globalDebugHandler gBug;
   const bool doGlobalDebug = gBug.GetDoGlobalDebug();
@@ -38,11 +43,15 @@ int validateRho(std::string rhoFileName, std::string inFileName)
   TFile* outFile_p = new TFile(outFileName.c_str(), "RECREATE");
   TTree* outTree_p = new TTree("validateRhoTree", "");  
 
+  Int_t cent_;
   std::vector<float>* etRecalc_p = new std::vector<float>;
   std::vector<float>* etATLAS_p = new std::vector<float>;
 
+  outTree_p->Branch("cent", &cent_, "cent/I");
   outTree_p->Branch("etRecalc", &etRecalc_p);
   outTree_p->Branch("etATLAS", &etATLAS_p);
+
+  Float_t fcalA_et_, fcalC_et_;
   
   Int_t run_, evt_;
   UInt_t lumi_;
@@ -98,6 +107,8 @@ int validateRho(std::string rhoFileName, std::string inFileName)
   inTree_p->SetBranchStatus("towers_pt", 1);
   inTree_p->SetBranchStatus("towers_phi", 1);
   inTree_p->SetBranchStatus("towers_eta", 1);
+  inTree_p->SetBranchStatus("fcalA_et", 1);
+  inTree_p->SetBranchStatus("fcalC_et", 1);
   
   inTree_p->SetBranchAddress("runNumber", &run_);
   inTree_p->SetBranchAddress("lumiBlock", &lumi_);
@@ -105,8 +116,10 @@ int validateRho(std::string rhoFileName, std::string inFileName)
   inTree_p->SetBranchAddress("towers_pt", &towers_pt_p);
   inTree_p->SetBranchAddress("towers_phi", &towers_phi_p);
   inTree_p->SetBranchAddress("towers_eta", &towers_eta_p);
-
-  if(doGlobalDebug) std::cout << "GLOBAL DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+  inTree_p->SetBranchAddress("fcalA_et", &fcalA_et_);
+  inTree_p->SetBranchAddress("fcalC_et", &fcalC_et_);
+ 
+ if(doGlobalDebug) std::cout << "GLOBAL DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
   std::vector<float> fullEtaBins;
   rhoTree_p->GetEntry(0);
   for(unsigned int eI = 0; eI < etaMin_p->size(); ++eI){
@@ -156,6 +169,8 @@ int validateRho(std::string rhoFileName, std::string inFileName)
     }
 
     if(doGlobalDebug) std::cout << "GLOBAL DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+
+    cent_ = centTable.GetCent(fcalA_et_ + fcalC_et_);
 
     outTree_p->Fill();
   }

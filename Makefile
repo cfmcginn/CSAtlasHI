@@ -45,7 +45,7 @@ MKDIR_OBJ=mkdir -p $(QTDIR)/obj
 MKDIR_OUTPUT=mkdir -p $(QTDIR)/output
 MKDIR_PDF=mkdir -p $(QTDIR)/pdfDir
 
-all: mkdirBin mkdirLib mkdirObj mkdirOutput mkdirPdf obj/globalDebugHandler.o obj/checkMakeDir.o obj/constituentBuilder.o obj/rhoBuilder.o obj/configParser.o obj/centralityFromInput.o lib/libCSATLAS.so bin/makeClusterTree.exe bin/makeClusterHist.exe bin/plotClusterHist.exe bin/deriveSampleWeights.exe bin/deriveCentWeights.exe bin/validateRho.exe bin/validateRhoHist.exe bin/validateRhoPlot.exe
+all: mkdirBin mkdirLib mkdirObj mkdirOutput mkdirPdf obj/globalDebugHandler.o obj/checkMakeDir.o obj/constituentBuilder.o obj/rhoBuilder.o obj/configParser.o obj/centralityFromInput.o obj/towerWeightTwol.o lib/libCSATLAS.so bin/makeClusterTree.exe bin/makeClusterHist.exe bin/plotClusterHist.exe bin/deriveSampleWeights.exe bin/deriveCentWeights.exe bin/validateRho.exe bin/validateRhoHist.exe bin/validateRhoPlot.exe
 
 mkdirBin:
 	$(MKDIR_BIN)
@@ -82,6 +82,9 @@ obj/configParser.o: src/configParser.C
 
 obj/centralityFromInput.o: src/centralityFromInput.C
 	$(CXX) $(CXXFLAGS) -fPIC -c src/centralityFromInput.C -o obj/centralityFromInput.o $(INCLUDE) $(ROOT)
+
+obj/towerWeightTwol.o: src/towerWeightTwol.C
+	$(CXX) $(CXXFLAGS) -fPIC -c src/towerWeightTwol.C -o obj/towerWeightTwol.o $(INCLUDE) $(ROOT)
 
 lib/libCSATLAS.so:
 	$(CXX) $(CXXFLAGS) -fPIC -shared -o lib/libCSATLAS.so obj/checkMakeDir.o obj/globalDebugHandler.o obj/constituentBuilder.o obj/rhoBuilder.o obj/configParser.o obj/centralityFromInput.o $(FASTJET) $(ROOT) $(INCLUDE)
