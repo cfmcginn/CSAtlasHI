@@ -60,10 +60,7 @@ bool configParser::Init(TEnv* inConfigEnv_p)
   THashList* hash_p = (THashList*)inConfigEnv_p->GetTable();
   for(Int_t entry = 0; entry < hash_p->GetEntries(); ++entry){
     m_configVals[hash_p->At(entry)->GetName()] = inConfigEnv_p->GetValue(hash_p->At(entry)->GetName(), "");
-
-    //    std::cout << hash_p->At(entry)->GetName() << ", " << hash_p->At(entry)->GetTitle() << std::endl;
   }
-  
   return true;
 }
 

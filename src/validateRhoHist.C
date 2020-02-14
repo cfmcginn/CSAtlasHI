@@ -76,8 +76,8 @@ int validateRhoHist(std::string inFileName)
 
   std::string outFileName = "output/" + dateStr + "/validateRhoHist_" + dateStr + ".root";
   TFile* outFile_p = new TFile(outFileName.c_str(), "RECREATE");
-  TH1D* deltaEt_p = new TH1D("deltaEt_h", ";#Sigma(E_{T})_{Recalc.} - #Sigma(E_{T})_{ATLAS};Counts", nDeltaRhoBins, deltaRhoBins);
-  TH2D* deltaEtVEta_p = new TH2D("deltaEtVEta_h", ";#eta;#Sigma(E_{T})_{Recalc.} - #Sigma(E_{T})_{ATLAS}", nEtaBins, etaBins, nDeltaRhoBins, deltaRhoBins);
+  TH1D* deltaEt_p = new TH1D("deltaEt_h", ";#Sigma(E_{T})_{Recalc.} - #Sigma(E_{T})_{ATLAS} [GeV];Counts", nDeltaRhoBins, deltaRhoBins);
+  TH2D* deltaEtVEta_p = new TH2D("deltaEtVEta_h", ";#eta;#Sigma(E_{T})_{Recalc.} - #Sigma(E_{T})_{ATLAS} [GeV]", nEtaBins, etaBins, nDeltaRhoBins, deltaRhoBins);
   centerTitles(deltaEt_p);
   centerTitles(deltaEtVEta_p);
   

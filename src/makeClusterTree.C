@@ -106,7 +106,7 @@ int makeClusterTree(std::string inConfigFileName)
 
   checkMakeDir check;
   if(!check.checkFileExt(inConfigFileName, "txt")) return 1; // Check input is valid Config file
-  configParser config(inConfigFileName);//Process input config
+  configParser config(inConfigFileName);//Process input conf(ig
   std::string inROOTFileName = config.GetConfigVal("INFILENAME");
   std::string inCentFileName = config.GetConfigVal("CENTFILENAME");
   

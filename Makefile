@@ -1,9 +1,18 @@
-CXX = g++
+cCXX = g++
 #O3 for max optimization (go to 0 for debug)
 CXXFLAGS = -Wall -Werror -O3 -Wextra -Wno-unused-local-typedefs -Wno-deprecated-declarations -std=c++11 -g
 ifeq "$(GCCVERSION)" "1"
   CXXFLAGS += -Wno-error=misleading-indentation
 endif
+
+define QTDIRERR
+ QTDIR is not set at all. Please set this environment variable to point to your build - this should be either
+export QTDIR=$(PWD)
+or
+source setEnv.sh
+if you have made appropriate changes.
+For more, see README for full setup recommendations
+endef
 
 define FJCONTRIBERR
  FJCONTRIB__HOME is not set at all. Please set this environment variable to point to your contrib package. If local, try your fastjet-install, i.e
@@ -13,12 +22,16 @@ lsetup "lcgenv -p LCG_96b x86_64-centos7-gcc8-opt fjcontrib"
 and see README for full setup recommendations
 endef
 
+ifndef QTDIR
+$(error "$(QTDIRERR)")	
+endif
+
 ifndef FJCONTRIB__HOME
 $(error "$(FJCONTRIBERR)")	
 endif
 
-INCLUDE=-I$(PWD)
-LIB=-L$(PWD)/lib
+INCLUDE=-I$(QTDIR)
+LIB=-L$(QTDIR)/lib
 ROOT=`root-config --cflags --glibs`
 
 FASTJET=`fastjet-config --cxxflags  --libs --plugins --runpath`
@@ -26,11 +39,11 @@ FJCONTRIB=-I$(FJCONTRIB__HOME)/include -L$(FJCONTRIB__HOME)/lib -lConstituentSub
 
 PYTHIA8=-I$(PYTHIA8PATH)/include -O2 -pedantic -W -Wall -Wshadow -fPIC -L$(PYTHIA8PATH)/lib -Wl,-rpath,$(PYTHIA8PATH)/lib -lpythia8 -ldl
 
-MKDIR_BIN=mkdir -p $(PWD)/bin
-MKDIR_LIB=mkdir -p $(PWD)/lib
-MKDIR_OBJ=mkdir -p $(PWD)/obj
-MKDIR_OUTPUT=mkdir -p $(PWD)/output
-MKDIR_PDF=mkdir -p $(PWD)/pdfDir
+MKDIR_BIN=mkdir -p $(QTDIR)/bin
+MKDIR_LIB=mkdir -p $(QTDIR)/lib
+MKDIR_OBJ=mkdir -p $(QTDIR)/obj
+MKDIR_OUTPUT=mkdir -p $(QTDIR)/output
+MKDIR_PDF=mkdir -p $(QTDIR)/pdfDir
 
 all: mkdirBin mkdirLib mkdirObj mkdirOutput mkdirPdf obj/globalDebugHandler.o obj/checkMakeDir.o obj/constituentBuilder.o obj/rhoBuilder.o obj/configParser.o obj/centralityFromInput.o lib/libCSATLAS.so bin/makeClusterTree.exe bin/makeClusterHist.exe bin/plotClusterHist.exe bin/deriveSampleWeights.exe bin/deriveCentWeights.exe bin/validateRho.exe bin/validateRhoHist.exe bin/validateRhoPlot.exe
 
