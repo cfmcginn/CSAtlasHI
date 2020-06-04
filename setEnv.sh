@@ -1,6 +1,7 @@
 #!/bin/bash
 
-QTDIR=/home/cfmcginn/Projects/QT/CSAtlasHI
+QTDIR=/usatlas/u/cfmcginn/Projects/QT/CSAtlasHI
+#QTDIR=/home/cfmcginn/Projects/QT/CSAtlasHI
 if [[ -d $QTDIR ]]
 then
     echo "QTDIR set to '$QTDIR'; if wrong please fix"
