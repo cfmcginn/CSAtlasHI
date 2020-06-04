@@ -545,16 +545,12 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
     }
   }
 
-  //std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
-
   TFile* inATLASFile_p = nullptr;
   TTree* atlasTree_p = nullptr;
   std::map<std::string, unsigned int> runLumiEvtStrToEntry;
   
   TFile* inFile_p = new TFile(inFileName.c_str(), "READ");
   TTree* clusterTree_p = (TTree*)inFile_p->Get(treeStr.c_str());
-
-  //std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 
   std::vector<float>* clusterE_p=nullptr;
   std::vector<float>* clusterEta_p=nullptr;
@@ -574,7 +570,6 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
     clusterTree_p->SetBranchStatus("etaBins", 1);
     clusterTree_p->SetBranchStatus("rho", 1);
   }
-  //std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 
   clusterTree_p->SetBranchAddress("runNumber", &run_);
   clusterTree_p->SetBranchAddress("lumiBlock", &lumi_);
@@ -588,7 +583,6 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
     clusterTree_p->SetBranchAddress("etaBins", &etaBins_p);
     clusterTree_p->SetBranchAddress("rho", &rho_p);
   }
-  //std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
   
   if(doATLASFile){    
     if(sameFileATLAS){
@@ -647,9 +641,7 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
     }
   }
 
-  //std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
-
-  const Int_t nEntries = TMath::Min(50000, (Int_t)clusterTree_p->GetEntries());
+  const Int_t nEntries = TMath::Min(1000, (Int_t)clusterTree_p->GetEntries());
   const Int_t nDiv = TMath::Max(1, nEntries/400);
 
   /*

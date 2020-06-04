@@ -6,7 +6,7 @@ then
     id=$1
 fi
 
-inputFile=input/rucioJZAllFiles.txt
+inputFile=input/rucioJZAllFiles_TEST_20200604.txt
 
 #source /usatlas/u/cfmcginn/.setEnv.sh
 
@@ -33,8 +33,11 @@ else
     echo "DOWNLOADING FILE $file"
     rucio download $file --no-subdir
 
-    if [[ -f $file ]]
-    then
+    file2=$(echo $file | sed -e "s@:@/@g")
+
+    echo " Checking \'$file2\'"
+    if [[ -f $file2 ]]
+    then       
 	dummy=0
     else
 	echo "DOWNLOAD FAILED, exit 1."

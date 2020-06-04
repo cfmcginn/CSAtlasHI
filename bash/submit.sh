@@ -16,6 +16,8 @@ sed -i -e "s@Queue@@g" $cFile2
 
 files=()
 
+mainInput=input/rucioJZAllFiles_TEST_20200604.txt
+
 for i in include/*.h
 do
     files+=($i)
@@ -43,9 +45,9 @@ done
 tar -czvf inTar.tar.gz $inputStr
 mv inTar.tar.gz $cDir
 
-count=$(cat input/rucioJZAllFiles.txt | wc -l)
+count=$(cat $mainInput | wc -l)
 
 echo "transfer_input_files = inTar.tar.gz,scriptForCondor.sh" >> $cFile2
 echo "Queue $count" >> $cFile2
 
-cp scriptForCondor.sh $cDir
+cp bash/scriptForCondor.sh $cDir
