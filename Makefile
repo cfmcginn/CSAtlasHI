@@ -45,7 +45,7 @@ MKDIR_OBJ=mkdir -p $(QTDIR)/obj
 MKDIR_OUTPUT=mkdir -p $(QTDIR)/output
 MKDIR_PDF=mkdir -p $(QTDIR)/pdfDir
 
-all: mkdirBin mkdirLib mkdirObj mkdirOutput mkdirPdf obj/globalDebugHandler.o obj/checkMakeDir.o obj/constituentBuilder.o obj/rhoBuilder.o obj/configParser.o obj/centralityFromInput.o obj/towerWeightTwol.o lib/libCSATLAS.so bin/makeClusterTree.exe bin/makeClusterHist.exe bin/plotClusterHist.exe bin/deriveSampleWeights.exe bin/deriveCentWeights.exe bin/validateRho.exe bin/validateRhoHist.exe bin/validateRhoPlot.exe
+all: mkdirBin mkdirLib mkdirObj mkdirOutput mkdirPdf obj/checkMakeDir.o obj/constituentBuilder.o obj/globalDebugHandler.o obj/rhoBuilder.o obj/sampleHandler.o obj/configParser.o obj/centralityFromInput.o obj/towerWeightTwol.o lib/libCSATLAS.so bin/makeClusterTree.exe bin/makeClusterHist.exe bin/plotClusterHist.exe bin/deriveSampleWeights.exe bin/deriveCentWeights.exe bin/validateRho.exe bin/validateRhoHist.exe bin/validateRhoPlot.exe
 
 mkdirBin:
 	$(MKDIR_BIN)
@@ -77,6 +77,10 @@ obj/constituentBuilder.o: src/constituentBuilder.C
 obj/rhoBuilder.o: src/rhoBuilder.C
 	$(CXX) $(CXXFLAGS) -fPIC -c src/rhoBuilder.C -o obj/rhoBuilder.o $(INCLUDE)
 
+obj/sampleHandler.o: src/sampleHandler.C
+	$(CXX) $(CXXFLAGS) -fPIC -c src/sampleHandler.C -o obj/sampleHandler.o $(INCLUDE)
+
+
 obj/configParser.o: src/configParser.C
 	$(CXX) $(CXXFLAGS) -fPIC -c src/configParser.C -o obj/configParser.o $(INCLUDE) $(ROOT)
 
@@ -87,7 +91,7 @@ obj/towerWeightTwol.o: src/towerWeightTwol.C
 	$(CXX) $(CXXFLAGS) -fPIC -c src/towerWeightTwol.C -o obj/towerWeightTwol.o $(INCLUDE) $(ROOT)
 
 lib/libCSATLAS.so:
-	$(CXX) $(CXXFLAGS) -fPIC -shared -o lib/libCSATLAS.so obj/checkMakeDir.o obj/globalDebugHandler.o obj/constituentBuilder.o obj/rhoBuilder.o obj/configParser.o obj/centralityFromInput.o $(FASTJET) $(ROOT) $(INCLUDE)
+	$(CXX) $(CXXFLAGS) -fPIC -shared -o lib/libCSATLAS.so obj/checkMakeDir.o obj/globalDebugHandler.o obj/constituentBuilder.o obj/rhoBuilder.o obj/configParser.o obj/centralityFromInput.o obj/sampleHandler.o $(FASTJET) $(ROOT) $(INCLUDE)
 
 bin/makeClusterTree.exe: src/makeClusterTree.C
 	$(CXX) $(CXXFLAGS) src/makeClusterTree.C -o bin/makeClusterTree.exe $(FJCONTRIB) $(FASTJET) $(ROOT) $(INCLUDE) $(LIB) -lCSATLAS

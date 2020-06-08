@@ -4,14 +4,14 @@ cFile=input/condorTEMPLATE.job
 
 DATE=`date +%Y%m%d`
 TIME=`date +%H%M%S`
-cDir=condorDir/condor_"$DATE"_"$TIME"
+cDir=/atlasgpfs01/usatlas/data/cfmcginn/ATLASNTuples/QT/condorDir/condor_"$DATE"_"$TIME"
 
 mkdir -p $cDir
 
 cFile2=$cDir/condor_"$DATE"_"$TIME".job
 cp $cFile $cFile2
 
-sed -i -e "s@INITDIR@$PWD/$cDir@g" $cFile2
+sed -i -e "s@INITDIR@$cDir@g" $cFile2
 sed -i -e "s@Queue@@g" $cFile2
 
 files=()

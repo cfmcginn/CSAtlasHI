@@ -32,6 +32,7 @@
 #include "include/plotUtilities.h"
 #include "include/returnRootFileContentsList.h"
 #include "include/rhoBuilder.h"
+#include "include/sampleHandler.h"
 #include "include/stringUtil.h"
 #include "include/ttreeUtil.h"
 
@@ -120,8 +121,6 @@ int makeClusterTree(std::string inConfigFileName)
   centralityFromInput centTable(inCentFileName);
 
   //Process our config file
-  std::string jzStr = config.GetConfigVal("JZSTR");
-  if(jzStr.size() == 0) jzStr = "NOJZ";
   const bool isMC = std::stoi(config.GetConfigVal("ISMC"));
   const bool doTracks = std::stoi(config.GetConfigVal("DOTRACKS"));
   const bool doTowers = std::stoi(config.GetConfigVal("DOTOWERS"));  
@@ -141,8 +140,19 @@ int makeClusterTree(std::string inConfigFileName)
   const double jtMaxAbsEta = std::stod(config.GetConfigVal("JTMAXABSETA"));  
   
   TFile* inFile_p = new TFile(inROOTFileName.c_str(), "READ"); 
+  TEnv* inFileConfig_p = (TEnv*)inFile_p->Get("config");
+  std::string inDataSet = inFileConfig_p->GetValue("INDATASET", "");
+  if(inDataSet.size() == 0){
+    std::cout << "NO INDATASET FOUND. return 1" << std::endl;
+    return 1;
+  }
+
+  sampleHandler sHandler;
+  sHandler.Init(inDataSet);
+  
+
   std::vector<std::string> treeList = returnRootFileContentsList(inFile_p, "TTree"); //Grab all file ttree names
-  std::string treeName = "jetTree";
+  std::string treeName = "gammaJetTree_p";
   if(!vectContainsStr(treeName, &treeList)){ //Check contents contain tree we want
     std::cout << "Tree \'" << treeName << "\' is not found in file \'" << inROOTFileName << "\'. return 1" << std::endl;
     return 1;
@@ -164,9 +174,9 @@ int makeClusterTree(std::string inConfigFileName)
     branchList.push_back("trk_phi");
   }
   if(doTowers){//Append tower variables according to config
-    branchList.push_back("towers_pt");
-    branchList.push_back("towers_eta");
-    branchList.push_back("towers_phi");
+    branchList.push_back("tower_pt");
+    branchList.push_back("tower_eta");
+    branchList.push_back("tower_phi");
   }
   if(isMC){
     branchList.push_back("akt4_truth_jet_pt");
@@ -187,9 +197,9 @@ int makeClusterTree(std::string inConfigFileName)
   std::vector<float>* trk_eta_p=nullptr;
   std::vector<float>* trk_phi_p=nullptr;
 
-  std::vector<float>* towers_pt_p=nullptr;
-  std::vector<float>* towers_eta_p=nullptr;
-  std::vector<float>* towers_phi_p=nullptr;
+  std::vector<float>* tower_pt_p=nullptr;
+  std::vector<float>* tower_eta_p=nullptr;
+  std::vector<float>* tower_phi_p=nullptr;
 
   std::vector<float>* akt4hi_em_xcalib_jet_pt_p=nullptr;
   std::vector<float>* akt4hi_em_xcalib_jet_phi_p=nullptr;
@@ -211,9 +221,9 @@ int makeClusterTree(std::string inConfigFileName)
     inTree_p->SetBranchAddress("trk_phi", &trk_phi_p);
   }
   if(doTowers){
-    inTree_p->SetBranchAddress("towers_pt", &towers_pt_p);
-    inTree_p->SetBranchAddress("towers_eta", &towers_eta_p);
-    inTree_p->SetBranchAddress("towers_phi", &towers_phi_p);
+    inTree_p->SetBranchAddress("tower_pt", &tower_pt_p);
+    inTree_p->SetBranchAddress("tower_eta", &tower_eta_p);
+    inTree_p->SetBranchAddress("tower_phi", &tower_phi_p);
   }
 
   inTree_p->SetBranchAddress("akt4hi_em_xcalib_jet_pt", &akt4hi_em_xcalib_jet_pt_p);
@@ -226,17 +236,14 @@ int makeClusterTree(std::string inConfigFileName)
     inTree_p->SetBranchAddress("akt4_truth_jet_phi", &akt4_truth_jet_phi_p);
   }
 
-  std::string outFileName = "output/" + dateStr + "/" + rootFileNameProc(config.GetConfigVal("OUTFILENAME"), {"ISMC" + std::to_string(isMC), jzStr, dateStr}); 
+  std::string outFileName = "output/" + dateStr + "/" + rootFileNameProc(config.GetConfigVal("OUTFILENAME"), {"ISMC" + std::to_string(isMC), dateStr}); 
   
   TFile* outFile_p = new TFile(outFileName.c_str(), "RECREATE");
   TTree* outTree_p = new TTree("clusterJetsCS", "");
 
-  Int_t jzVal_ = -1;
-  if(jzStr.find("JZ1") != std::string::npos) jzVal_ = 1;
-  else if(jzStr.find("JZ2") != std::string::npos) jzVal_ = 2;
-  else if(jzStr.find("JZ3") != std::string::npos) jzVal_ = 3;
-  else if(jzStr.find("JZ4") != std::string::npos) jzVal_ = 4;
-  else if(jzStr.find("JZ5") != std::string::npos) jzVal_ = 5;
+  unsigned long long sampleTag_ = sHandler.GetTag();
+  Float_t xSectionNB_ = sHandler.GetXSection();
+  Float_t filterEff_ = sHandler.GetFilterEff();;
   Float_t cent_;
 
   std::vector<float>* etaBinsOut_p=new std::vector<float>;
@@ -340,12 +347,14 @@ int makeClusterTree(std::string inConfigFileName)
   Float_t jtptTruth_[nMaxJets];
   Float_t jtetaTruth_[nMaxJets];
   Float_t jtphiTruth_[nMaxJets];
+
+  outTree_p->Branch("sampleTag", &sampleTag_, "sampleTag/l");
+  outTree_p->Branch("xSectionNB", &xSectionNB_, "xSectionNB/F");
+  outTree_p->Branch("filterEff", &filterEff_, "filterEff/F");
   
   outTree_p->Branch("run", &runNumber, "run/I");
   outTree_p->Branch("lumi", &lumiBlock, "lumi/i");
   outTree_p->Branch("evt", &eventNumber, "evt/I");
-
-  outTree_p->Branch("jzVal", &jzVal_, "jzVal/I");
 
   outTree_p->Branch("fcalA_et", &fcalA_et, "fcalA_et/F");
   outTree_p->Branch("fcalC_et", &fcalC_et, "fcalC_et/F");
@@ -532,7 +541,7 @@ int makeClusterTree(std::string inConfigFileName)
 
     if(doTowers){
       cBuilder.Clean();
-      cBuilder.InitPtEtaPhi(towers_pt_p, towers_eta_p, towers_phi_p);
+      cBuilder.InitPtEtaPhi(tower_pt_p, tower_eta_p, tower_phi_p);
       tempInputs = cBuilder.GetAllInputs(); 
 
       //Do no-sub - this is slow because we run ClusterSequenceArea
@@ -555,7 +564,7 @@ int makeClusterTree(std::string inConfigFileName)
       if(doGlobalDebug) std::cout << "GLOBAL DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
     
       //We need to build our rho
-      if(!rBuilder.CalcRhoFromPtEta(towers_pt_p, towers_eta_p)) return 1;
+      if(!rBuilder.CalcRhoFromPtEta(tower_pt_p, tower_eta_p)) return 1;
       if(doGlobalDebug) std::cout << "GLOBAL DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
       if(!rBuilder.SetRho(towerRhoOut_p)) return 1;
       if(!rBuilder.SetRhoPt(towerPtRhoOut_p)) return 1;
@@ -635,10 +644,17 @@ int makeClusterTree(std::string inConfigFileName)
   std::cout << " Main-eventloop wall (s), CPU: " << mainLoop.totalWall() << "/" << totalWall << ", " << mainLoop.totalCPU() << "/" << totalCPU << " (" << prettyString(100*mainLoop.totalCPU()/totalCPU, 2, false) << "%)" << std::endl;
 
   for(unsigned int sI = 0; sI < subMainLoop.size(); ++sI){
-    std::cout << "  Submain-eventloop " << sI << "/" << subMainLoop.size() << " wall (s), CPU: " << subMainLoop[sI].totalWall() << "/" << totalWall << ", " << subMainLoop[sI].totalCPU() << "/" << totalCPU << " (" << prettyString(100*subMainLoop[sI].totalCPU()/totalCPU, 2, false) << "%)" << std::endl;
+    std::cout << "POS: " << sI << std::endl;
+    std::cout << subMainLoop.size() << ", " << totalWall << ", " << totalCPU << std::endl;
+
+    std::cout << "  Submain-eventloop " << sI << "/" << subMainLoop.size() << " wall (s), CPU: " << subMainLoop[sI].totalWall() << "/" << totalWall << ", " << subMainLoop[sI].totalCPU() << "/" << totalCPU << std::endl; //" (" << prettyString(100*subMainLoop[sI].totalCPU()/totalCPU, 2, false) << "%)" << std::endl;
   }
 
-  std::cout << " Post-eventloop wall (s), CPU: " << postLoop.totalWall() << "/" << totalWall << ", " << postLoop.totalCPU() << "/" << totalCPU << " (" << prettyString(100*postLoop.totalCPU()/totalCPU, 2, false) << "%)" << std::endl;
+  if(doGlobalDebug) std::cout << "GLOBAL DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+
+  std::cout << " Post-eventloop wall (s), CPU: " << postLoop.totalWall() << "/" << totalWall << ", " << postLoop.totalCPU() << "/" << totalCPU << std::endl;//" (" << prettyString(100*postLoop.totalCPU()/totalCPU, 2, false) << "%)" << std::endl;
+
+  if(doGlobalDebug) std::cout << "GLOBAL DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
   
   return 0;
 }

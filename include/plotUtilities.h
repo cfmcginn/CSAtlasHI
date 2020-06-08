@@ -12,6 +12,9 @@
 #include "TH1.h"
 #include "TMath.h"
 
+//Local
+#include "include/stringUtil.h"
+
 std::string prettyString(double inVal, const int prec, const bool doDot)
 {
   const int maxPrec = 18;
@@ -30,7 +33,14 @@ std::string prettyString(double inVal, const int prec, const bool doDot)
   unsigned long long tempInVal = inVal;
   if(inVal - tempInVal > 0.5) ++tempInVal;
   retStr = std::to_string(tempInVal);
-  
+
+  while(retStr.size() < (unsigned int)prec){retStr = "0" + retStr;}
+  if(isStrSame(retStr, "0")){
+    std::string precStr = "";
+    while(prec > (int)precStr.size()){precStr = precStr + "0";}
+    retStr = retStr + precStr;
+  }  
+
   retStr = retStr.substr(0, retStr.size()-prec) + "." + retStr.substr(retStr.size()-prec, prec);
 
   if(retStr.substr(0,1).find(".") != std::string::npos) retStr = "0" + retStr;
