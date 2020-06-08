@@ -91,7 +91,7 @@ obj/towerWeightTwol.o: src/towerWeightTwol.C
 	$(CXX) $(CXXFLAGS) -fPIC -c src/towerWeightTwol.C -o obj/towerWeightTwol.o $(INCLUDE) $(ROOT)
 
 lib/libCSATLAS.so:
-	$(CXX) $(CXXFLAGS) -fPIC -shared -o lib/libCSATLAS.so obj/checkMakeDir.o obj/globalDebugHandler.o obj/constituentBuilder.o obj/rhoBuilder.o obj/configParser.o obj/centralityFromInput.o obj/sampleHandler.o $(FASTJET) $(ROOT) $(INCLUDE)
+	$(CXX) $(CXXFLAGS) -fPIC -shared -o lib/libCSATLAS.so obj/checkMakeDir.o obj/globalDebugHandler.o obj/constituentBuilder.o obj/rhoBuilder.o obj/configParser.o obj/centralityFromInput.o obj/sampleHandler.o obj/towerWeightTwol.o $(FASTJET) $(ROOT) $(INCLUDE)
 
 bin/makeClusterTree.exe: src/makeClusterTree.C
 	$(CXX) $(CXXFLAGS) src/makeClusterTree.C -o bin/makeClusterTree.exe $(FJCONTRIB) $(FASTJET) $(ROOT) $(INCLUDE) $(LIB) -lCSATLAS

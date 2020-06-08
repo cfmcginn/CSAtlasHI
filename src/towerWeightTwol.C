@@ -22,6 +22,8 @@ towerWeightTwol::~towerWeightTwol(){Clean();}
 
 Bool_t towerWeightTwol::Init(std::string inWeightFileName)
 {
+  m_doGlobalDebug = gDebug.GetDoGlobalDebug();  
+
   m_weightFileName = inWeightFileName;
   if(!check.checkFileExt(m_weightFileName, "root")){
     std::cout << "towerWeightTwol::Init - Given inWeightFileName \'" << inWeightFileName << "\' is invalid. Init failed, return false" << std::endl;
@@ -46,14 +48,21 @@ Bool_t towerWeightTwol::Init(std::string inWeightFileName)
 Float_t towerWeightTwol::GetEtaPhiResponse(Float_t eta, Float_t phi, Int_t runNumber)
 {
   Float_t weight = 1.0;
-  m_h3_w_p->FindBin(eta, phi, (Float_t)runNumber);  
+  runNumber = 1;
+  Int_t binX = m_h3_w_p->GetXaxis()->FindBin(eta);
+  Int_t binY = m_h3_w_p->GetYaxis()->FindBin(phi);
+  Float_t val = m_h3_w_p->GetBinContent(binX, binY, runNumber);
+  if(val > 0) weight = 1./val;
+  else if(m_doGlobalDebug) std::cout << "WARNING WEIGHT IS ZERO" << std::endl;
+  
   return weight;
 }
 
 void towerWeightTwol::Clean()
 {
   m_weightFileName = "";
-
+  m_doGlobalDebug = false;
+  
   if(m_weightFile_p != nullptr){
     m_weightFile_p->Close();
     delete m_weightFile_p;

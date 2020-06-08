@@ -15,6 +15,7 @@
 
 //Local
 #include "include/checkMakeDir.h"
+#include "include/globalDebugHandler.h"
 
 class towerWeightTwol{
  public:
@@ -28,9 +29,12 @@ class towerWeightTwol{
   
  private:
   checkMakeDir check;
+  globalDebugHandler gDebug;
+
+  bool m_doGlobalDebug = false;
   
   std::string m_weightFileName;
-  const std::string m_histName = "h3_w"; 
+  const std::string m_histName = "h3_eta_phi_response"; 
 
   TFile* m_weightFile_p = nullptr;
   TH3F* m_h3_w_p = nullptr;

@@ -6,5 +6,5 @@ then
     export DOGLOBALDEBUGROOT=$1
 fi
 
-configFile=/home/cfmcginn/Projects/QT/input/defaultConfig.txt
+configFile=/home/cfmcginn/Projects/QT/CSAtlasHI/input/defaultConfig.txt
 ./bin/makeClusterTree.exe $configFile

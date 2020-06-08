@@ -18,6 +18,7 @@
 #include "include/globalDebugHandler.h"
 #include "include/plotUtilities.h"
 #include "include/stringUtil.h"
+#include "include/towerWeightTwol.h"
 
 int validateRho(std::string rhoFileName, std::string inFileName)
 {
@@ -28,6 +29,10 @@ int validateRho(std::string rhoFileName, std::string inFileName)
   const std::string centFileName = "input/centrality_cuts_Gv32_proposed_RCMOD2.txt";
   if(!check.checkFileExt(centFileName, ".txt")) return 1;
   centralityFromInput centTable(centFileName);  
+
+  const std::string towerFileName = "input/cluster.geo.HIJING_2018.root";
+  if(!check.checkFileExt(towerFileName, ".root")) return 1;
+  towerWeightTwol towerTable(towerFileName);  
   
   //DEBUG BOOL FROM ENV VAR
   globalDebugHandler gBug;
@@ -165,7 +170,15 @@ int validateRho(std::string rhoFileName, std::string inFileName)
 
     for(unsigned int tI = 0; tI < towers_pt_p->size(); ++tI){
       int etaPos = ghostPos(fullEtaBins, towers_eta_p->at(tI));
-      etRecalc_p->at(etaPos) += towers_pt_p->at(tI);
+      Float_t weight = towerTable.GetEtaPhiResponse(towers_eta_p->at(tI), towers_phi_p->at(tI), run_);
+      float etaCent = (fullEtaBins[etaPos] + fullEtaBins[etaPos+1])/2.;
+      
+      if(entry == 1 && towers_eta_p->at(tI) > -0.8 && towers_eta_p->at(tI) < -0.7){
+	std::cout << " TOWER PT, ETA, PHI, WEIGHT: " << towers_pt_p->at(tI) << ", " << towers_eta_p->at(tI) << ", " << towers_phi_p->at(tI) << ", " << 1./weight << std::endl;
+	std::cout << "SUM PREV, CURR: " << 1000.*etRecalc_p->at(etaPos) << ", " << 1000.*(etRecalc_p->at(etaPos) + towers_pt_p->at(tI)*TMath::CosH(towers_eta_p->at(tI))*weight/TMath::CosH(etaCent)) << std::endl;
+      }
+      
+      etRecalc_p->at(etaPos) += towers_pt_p->at(tI)*TMath::CosH(towers_eta_p->at(tI))*weight/TMath::CosH(etaCent);
     }
 
     if(doGlobalDebug) std::cout << "GLOBAL DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;

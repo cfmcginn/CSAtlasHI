@@ -33,6 +33,7 @@ int validateRhoPlot(std::string inFileName)
   
   TFile* inFile_p = new TFile(inFileName.c_str(), "READ");
   TH1D* deltaEt_p = (TH1D*)inFile_p->Get("deltaEt_h");
+  TH1D* deltaEtOverSum_p = (TH1D*)inFile_p->Get("deltaEtOverSum_h");
   TH2D* deltaEtVEta_p = (TH2D*)inFile_p->Get("deltaEtVEta_h");
   TH2D* deltaEtVCent_p = (TH2D*)inFile_p->Get("deltaEtVCent_h");
 
@@ -46,6 +47,19 @@ int validateRhoPlot(std::string inFileName)
   gStyle->SetOptStat(0);
   
   std::string saveName = "pdfDir/" + dateStr + "/deltaEt_" + dateStr + ".pdf";
+  quietSaveAs(canv_p, saveName);
+  delete canv_p;
+
+  canv_p = new TCanvas("canv_p", "", 450, 450);
+  canv_p->SetTopMargin(0.02);
+  canv_p->SetRightMargin(0.02);
+  canv_p->SetBottomMargin(0.12);
+  canv_p->SetLeftMargin(0.12);
+
+  deltaEtOverSum_p->DrawCopy("HIST E1 P");
+  gStyle->SetOptStat(0);
+  
+  saveName = "pdfDir/" + dateStr + "/deltaEtOverSum_" + dateStr + ".pdf";
   quietSaveAs(canv_p, saveName);
   delete canv_p;
 

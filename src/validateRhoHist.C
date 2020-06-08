@@ -76,10 +76,17 @@ int validateRhoHist(std::string inFileName)
   const Float_t rhoHigh = 20;
   Double_t deltaRhoBins[nDeltaRhoBins+1];
   getLinBins(rhoLow, rhoHigh, nDeltaRhoBins, deltaRhoBins);  
+  
+  const Int_t nDeltaRhoOverSumBins = 100;
+  const Float_t rhoOverSumLow = -1.;
+  const Float_t rhoOverSumHigh = 1.;
+  Double_t deltaRhoOverSumBins[nDeltaRhoOverSumBins+1];
+  getLinBins(rhoOverSumLow, rhoOverSumHigh, nDeltaRhoOverSumBins, deltaRhoOverSumBins);  
 
   std::string outFileName = "output/" + dateStr + "/validateRhoHist_" + dateStr + ".root";
   TFile* outFile_p = new TFile(outFileName.c_str(), "RECREATE");
   TH1D* deltaEt_p = new TH1D("deltaEt_h", ";#Sigma(E_{T})_{Recalc.} - #Sigma(E_{T})_{ATLAS} [GeV];Counts", nDeltaRhoBins, deltaRhoBins);
+  TH1D* deltaEtOverSum_p = new TH1D("deltaEtOverSum_h", ";[#Sigma(E_{T})_{Recalc.} - #Sigma(E_{T})_{ATLAS}]/(Sum);Counts", nDeltaRhoOverSumBins, deltaRhoOverSumBins);
   TH2D* deltaEtVEta_p = new TH2D("deltaEtVEta_h", ";#eta;#Sigma(E_{T})_{Recalc.} - #Sigma(E_{T})_{ATLAS} [GeV]", nEtaBins, etaBins, nDeltaRhoBins, deltaRhoBins);
   TH2D* deltaEtVCent_p = new TH2D("deltaEtVCent_h", ";Centrality (%);#Sigma(E_{T})_{Recalc.} - #Sigma(E_{T})_{ATLAS} [GeV]", nCentBins, centBins, nDeltaRhoBins, deltaRhoBins);
   centerTitles(deltaEt_p);
@@ -100,7 +107,14 @@ int validateRhoHist(std::string inFileName)
       if(val <= rhoLow) val = (deltaRhoBins[0] + deltaRhoBins[1])/2.;
       if(val >= rhoHigh) val = (deltaRhoBins[nDeltaRhoBins-1] + deltaRhoBins[nDeltaRhoBins])/2.;
 
+      double val2 = val/(etRecalc_p->at(eI) + etATLAS_p->at(eI));
+
+      if(TMath::Abs(val) > 2.){
+	std::cout << "val diff, eta: " << val << ", " << etaCent << std::endl;
+      }
+      
       deltaEt_p->Fill(val);
+      deltaEtOverSum_p->Fill(val2);
       deltaEtVEta_p->Fill(etaCent, val);
       deltaEtVCent_p->Fill(cent_, val);
     }
@@ -110,6 +124,9 @@ int validateRhoHist(std::string inFileName)
 
   deltaEt_p->Write("", TObject::kOverwrite);
   delete deltaEt_p;
+
+  deltaEtOverSum_p->Write("", TObject::kOverwrite);
+  delete deltaEtOverSum_p;
 
   deltaEtVEta_p->Write("", TObject::kOverwrite);
   delete deltaEtVEta_p;
