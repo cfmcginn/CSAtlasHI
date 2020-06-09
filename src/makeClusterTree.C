@@ -75,11 +75,12 @@ void fillArrays(std::vector<float>* jetPts_p, std::vector<float>* jetEtas_p, std
   return;
 }
 
-void rescaleGhosts(std::vector<float> rho_, std::vector<float> etaBins_, std::vector<fastjet::PseudoJet>* ghosts)
+void rescaleGhosts(std::vector<float> rho_, std::vector<float> etaBins_, std::vector<fastjet::PseudoJet>* ghosts, double rescaleEtaCap = 100.)
 {
   for(fastjet::PseudoJet& ighost : (*ghosts)){
-    if(isinf(ighost.eta())) continue;
-    if(TMath::Abs(ighost.eta()) > 10.) continue;
+    if(TMath::Abs(ighost.eta()) > rescaleEtaCap) continue;
+    //    if(isinf(ighost.eta())) continue;
+    //    if(TMath::Abs(ighost.eta()) > 10.) continue;
 
     int ghostPos = ghostEtaPos(etaBins_, ighost);
 
@@ -402,7 +403,7 @@ int makeClusterTree(std::string inConfigFileName)
     outTree_p->Branch("jtphiTruth", jtphiTruth_, "jtphiTruth[njtTruth]/F");
   }
   
-  const ULong64_t nEntries = TMath::Min((ULong64_t)1000, (ULong64_t)inTree_p->GetEntries());
+  const ULong64_t nEntries = TMath::Min((ULong64_t)1, (ULong64_t)inTree_p->GetEntries());
   const ULong64_t nDiv = TMath::Max((ULong64_t)1, nEntries/20);
 
   std::cout << "Processing " << nEntries << " TTree entries..." << std::endl;
@@ -493,12 +494,15 @@ int makeClusterTree(std::string inConfigFileName)
 	ghostJetConst.clear();
 	fastjet::SelectorIsPureGhost().sift(jet.constituents(), ghostJetConst, realJetConst);
 
+
 	for(unsigned int rI = 0; rI < realJetConst.size(); ++rI){
 	  if(cBuilder.IsUserIndexGhosted(realJetConst[rI].user_index())) realJetConstDirty.push_back(realJetConst[rI]);
 	  else realJetConstClean.push_back(realJetConst[rI]);
 	}
-	
-	rescaleGhosts(*trkRhoOut_p, *etaBinsOut_p, &ghostJetConst);
+
+	std::cout << "LINE: " << __LINE__ << std::endl;
+	rescaleGhosts(*trkRhoOut_p, *etaBinsOut_p, &ghostJetConst, 2.5);
+
 	globalGhosts.insert(std::end(globalGhosts), std::begin(ghostJetConst), std::end(ghostJetConst));
 	const Int_t nRealConst = realJetConstClean.size();
 	if(nRealConst == 0) continue;
@@ -529,6 +533,7 @@ int makeClusterTree(std::string inConfigFileName)
       ++subMainLoopPos;
       subMainLoop[subMainLoopPos].start();
 
+      std::cout << "LINE: " << __LINE__ << std::endl;
       cBuilder.Clean();
       cBuilder.InitPtEtaPhi(trk_pt_p, trk_eta_p, trk_phi_p, 4.0);
       tempInputs = cBuilder.GetCleanInputs();
@@ -538,6 +543,7 @@ int makeClusterTree(std::string inConfigFileName)
       if(!vectContainsStr(algo, &jtAlgos)) return 1;
       algoPos = algoToPosMap[algo];
       
+      std::cout << "LINE: " << __LINE__ << std::endl;
       fillArrays(&tempJets, &njt_[algoPos], jtpt_[algoPos], jteta_[algoPos], jtphi_[algoPos], recoJtMinPt, jtMaxAbsEta);      
     
       cBuilder.InitPtEtaPhi(trk_pt_p, trk_eta_p, trk_phi_p);
@@ -565,8 +571,8 @@ int makeClusterTree(std::string inConfigFileName)
 	}
 
 	for(fastjet::PseudoJet& ighost : globalGhostsIter){
-	  if(isinf(ighost.eta())) continue;
-	  if(TMath::Abs(ighost.eta()) > 10.) continue;
+	  //	  if(isinf(ighost.eta())) continue;
+	  //	  if(TMath::Abs(ighost.eta()) > 10.) continue;
 	  int ghostPos = ghostEtaPos(*etaBinsOut_p, ighost);
 	  trkRhoIterOut_p->at(ghostPos) += ighost.E();
 	}
@@ -575,7 +581,7 @@ int makeClusterTree(std::string inConfigFileName)
 	  trkRhoIterOut_p->at(rI) /= 2.*TMath::Pi()*((etaBinsOut_p->at(rI+1) - etaBinsOut_p->at(rI)));
 	}
 	
-	rescaleGhosts(*trkRhoIterOut_p, *etaBinsOut_p, &globalGhosts);
+	rescaleGhosts(*trkRhoIterOut_p, *etaBinsOut_p, &globalGhosts, 2.5);
 	subtracted_particles = subtractor.do_subtraction(subtracted_particles, globalGhosts);
 	fastjet::ClusterSequence csIter(subtracted_particles, jet_def);
 	tempJets = fastjet::sorted_by_pt(csIter.inclusive_jets(recoJtMinPt));
@@ -585,6 +591,8 @@ int makeClusterTree(std::string inConfigFileName)
 
 	fillArrays(&tempJets, &njt_[algoPos], jtpt_[algoPos], jteta_[algoPos], jtphi_[algoPos], recoJtMinPt, jtMaxAbsEta);      		
       }      
+
+      std::cout << "LINE: " << __LINE__ << std::endl;
     }
 
     if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
@@ -594,7 +602,7 @@ int makeClusterTree(std::string inConfigFileName)
     subMainLoop[subMainLoopPos].stop();
     ++subMainLoopPos;
     subMainLoop[subMainLoopPos].start();
-
+  
     if(doTowers){
       cBuilder.Clean();
       cBuilder.InitPtEtaPhi(tower_pt_p, tower_eta_p, tower_phi_p);
@@ -638,7 +646,7 @@ int makeClusterTree(std::string inConfigFileName)
 	  else realJetConstClean.push_back(realJetConst[rI]);
 	}
 	
-	rescaleGhosts(*towerRhoOut_p, *etaBinsOut_p, &ghostJetConst);
+	rescaleGhosts(*towerRhoOut_p, *etaBinsOut_p, &ghostJetConst, 5.0);
 	globalGhosts.insert(std::end(globalGhosts), std::begin(ghostJetConst), std::end(ghostJetConst));
 	const Int_t nRealConst = realJetConstClean.size();
 	if(nRealConst == 0) continue;
@@ -685,8 +693,8 @@ int makeClusterTree(std::string inConfigFileName)
 	}
 
 	for(fastjet::PseudoJet& ighost : globalGhostsIter){
-	  if(isinf(ighost.eta())) continue;
-	  if(TMath::Abs(ighost.eta()) > 10.) continue;
+	  //	  if(isinf(ighost.eta())) continue;
+	  //	  if(TMath::Abs(ighost.eta()) > 10.) continue;
 	  int ghostPos = ghostEtaPos(*etaBinsOut_p, ighost);
 	  towerRhoIterOut_p->at(ghostPos) += ighost.E();
 	}
@@ -695,7 +703,7 @@ int makeClusterTree(std::string inConfigFileName)
 	  towerRhoIterOut_p->at(rI) /= 2.*TMath::Pi()*((etaBinsOut_p->at(rI+1) - etaBinsOut_p->at(rI)));
 	}
 	
-	rescaleGhosts(*towerRhoIterOut_p, *etaBinsOut_p, &globalGhosts);
+	rescaleGhosts(*towerRhoIterOut_p, *etaBinsOut_p, &globalGhosts, 5.0);
 	subtracted_particles = subtractor.do_subtraction(subtracted_particles, globalGhosts);
 	fastjet::ClusterSequence csIter(subtracted_particles, jet_def);
 	tempJets = fastjet::sorted_by_pt(csIter.inclusive_jets(recoJtMinPt));
