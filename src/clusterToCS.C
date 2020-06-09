@@ -151,7 +151,7 @@ void getJetsFromParticles(std::vector<float> rho_, std::vector<float> etaBins_, 
       subtractor.set_alpha(alphaParams[aI]);
       subtractor.set_remove_all_zero_pt_particles(true);
       subtractor.set_max_eta(maxGlobalAbsEta);
-      subtractor.set_keep_original_masses();
+      //      subtractor.set_keep_original_masses();
       subtracted_particles = subtractor.do_subtraction(realConst, ghosts);
    
       //      std::cout << "SUBTRACTED PARTICLES (pt, eta, phi, m): " << std::endl;
@@ -183,7 +183,7 @@ void getJetsFromParticles(std::vector<float> rho_, std::vector<float> etaBins_, 
     subtractor.set_alpha(alphaParams[aI]);
     subtractor.set_max_eta(maxGlobalAbsEta);
     subtractor.set_remove_all_zero_pt_particles(true);
-    subtractor.set_keep_original_masses();
+    //    subtractor.set_keep_original_masses();
     subtracted_particles = subtractor.do_subtraction(particles, globalGhosts, &globalGhostsIter);
 
     for(unsigned int pI = 0; pI < subtracted_particles.size(); ++pI){
@@ -271,12 +271,14 @@ void getJetsFromParticles(std::vector<float> rho_, std::vector<float> etaBins_, 
 }
 
 
-int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::string caloTrackStr = "calo", std::string jzStr = "")
+int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::string caloTrackStr = "trk", std::string jzStr = "")
 {
-  if(!checkFileExt(inFileName, ".root")) return 1;
+  checkMakeDir check;
+
+  if(!check.checkFileExt(inFileName, ".root")) return 1;
   const std::string centTableStr = "input/centrality_cuts_Gv32_proposed_RCMOD2.txt";
-  if(!checkFileExt(centTableStr, "txt")) return 1;
-  if(inATLASFileName.size() != 0 && !checkFileExt(inATLASFileName, ".root")) return 1;
+  if(!check.checkFileExt(centTableStr, "txt")) return 1;
+  if(inATLASFileName.size() != 0 && !check.checkFileExt(inATLASFileName, ".root")) return 1;
 
   bool doCalo = isStrSame("calo", caloTrackStr);
   std::string treeStr = "caloTree";
@@ -290,7 +292,7 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
   if(isStrSame("trk", caloTrackStr)){
     doCalo = false;
 
-    treeStr = "bush";
+    treeStr = "gammaJetTree_p";
     ptEStr = "trk_pt";
     phiStr = "trk_phi";
     etaStr = "trk_eta";
@@ -309,6 +311,8 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
   const bool sameFileATLAS = isStrSame(inFileName, inATLASFileName);
   bool doTruth = false;
   
+  std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+
   if(doATLASFile){
     TFile* inFile_p = new TFile(inATLASFileName.c_str(), "READ");
     TTree* clusterTree_p = (TTree*)inFile_p->Get("bush");
@@ -325,6 +329,8 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
     inFile_p->Close();
     delete inFile_p;
   }
+
+  std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
   
   centralityFromInput centTable(centTableStr);
 
@@ -332,8 +338,8 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
   const std::string dateStr = std::to_string(date->GetDate());
   delete date;
 
-  checkMakeDir("output");
-  checkMakeDir("output/" + dateStr);
+  check.doCheckMakeDir("output");
+  check.doCheckMakeDir("output/" + dateStr);
 
   cppWatch total, preLoop, preCluster, postCluster, postLoop;
   total.start();
@@ -362,6 +368,8 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
   else if(jzStr.find("JZ3") != std::string::npos) jzVal_ = 3;
   else if(jzStr.find("JZ4") != std::string::npos) jzVal_ = 4;
   else if(jzStr.find("JZ5") != std::string::npos) jzVal_ = 5;
+
+  std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 
   Int_t runATLAS_, evtATLAS_;
   UInt_t lumiATLAS_;
@@ -411,6 +419,8 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
   Float_t jtptATLAS_[nMaxJets];
   Float_t jtetaATLAS_[nMaxJets];
   Float_t jtphiATLAS_[nMaxJets];
+
+  std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 
   Int_t njtTruth_;
   Float_t jtptTruth_[nMaxJets];
@@ -482,6 +492,8 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
       std::cout << " " << pI << "/" << etaBins_p->size() << ": " << etaBins_p->at(pI) << std::endl;
     }
   }
+
+  std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
   
   //std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 
@@ -516,13 +528,18 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
     }      
   }
 
-  //std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+  std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+
+  std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 
   if(doATLASFile){
+    std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
     clusterJetsCS_p->Branch("njtATLAS", &njtATLAS_, "njtATLAS/I");
     clusterJetsCS_p->Branch("jtptATLAS", jtptATLAS_, "jtptATLAS[njtATLAS]/F");
     clusterJetsCS_p->Branch("jtetaATLAS", jtetaATLAS_, "jtetaATLAS[njtATLAS]/F");
     clusterJetsCS_p->Branch("jtphiATLAS", jtphiATLAS_, "jtphiATLAS[njtATLAS]/F");      
+
+  std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 
     if(doTruth){
       clusterJetsCS_p->Branch("njtTruth", &njtTruth_, "njtTruth/I");
@@ -545,6 +562,8 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
     }
   }
 
+  std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+
   TFile* inATLASFile_p = nullptr;
   TTree* atlasTree_p = nullptr;
   std::map<std::string, unsigned int> runLumiEvtStrToEntry;
@@ -566,6 +585,8 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
   clusterTree_p->SetBranchStatus(etaStr.c_str(), 1);
   clusterTree_p->SetBranchStatus(phiStr.c_str(), 1);
 
+  std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+
   if(doCalo){
     clusterTree_p->SetBranchStatus("etaBins", 1);
     clusterTree_p->SetBranchStatus("rho", 1);
@@ -583,6 +604,8 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
     clusterTree_p->SetBranchAddress("etaBins", &etaBins_p);
     clusterTree_p->SetBranchAddress("rho", &rho_p);
   }
+
+  std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
   
   if(doATLASFile){    
     if(sameFileATLAS){
@@ -641,6 +664,8 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
     }
   }
 
+  std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+
   const Int_t nEntries = TMath::Min(1000, (Int_t)clusterTree_p->GetEntries());
   const Int_t nDiv = TMath::Max(1, nEntries/400);
 
@@ -668,6 +693,8 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
   std::vector<std::vector<float> > atlasPt, atlasPhi, atlasEta;
   std::vector<std::vector<float> > truthPt, truthPhi, truthEta, truthChgPt, truthChgPhi, truthChgEta;
   std::vector<std::vector<float> > truth4GeVPt, truth4GeVPhi, truth4GeVEta, truth4GeVChgPt, truth4GeVChgPhi, truth4GeVChgEta;
+
+  std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
   
   for(Int_t pI = 0; pI < nPara; ++pI){
     particles.push_back({});
@@ -716,7 +743,7 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
     }
   }
 
-  //std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+  std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 
   preLoop.stop();  
   TLorentzVector tL;
@@ -768,10 +795,10 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
       particles[entry%nPara].push_back(fastjet::PseudoJet(Px, Py, Pz, E));
     }
 
-    //std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+    std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 
     if(!doCalo){
-      //std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+      std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
       for(unsigned int rI = 0; rI < rho_p->size(); ++rI){
 	rho_p->at(rI) = 0.0;
 	rho2_p->at(rI) = 0.0;
@@ -783,7 +810,7 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
 	}
       }
 
-      //std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+      std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
      
       for(unsigned int pI = 0; pI < particles[entry%nPara].size(); ++pI){
 	Int_t etaPos = ghostEtaPos(*etaBins_p, particles[entry%nPara][pI]);
@@ -800,20 +827,20 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
 	etaPhiTower[etaPos][phiPos] += tL;
       }
 
-      //std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+      std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 
       std::vector<float> mean, sigma;
       std::vector<fastjet::PseudoJet> towerParticles;
       for(unsigned int rI = 0; rI < rho_p->size(); ++rI){
-	//std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+	std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 	mean.push_back(rho_p->at(rI)/(Double_t)etaPhiTower[rI].size());
 	sigma.push_back(TMath::Sqrt(rho2_p->at(rI)/(Double_t)etaPhiTower[rI].size() - mean[rI]*mean[rI]));
 
-	//std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+	std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 
 	Double_t etaVal = (etaBins_p->at(rI) + etaBins_p->at(rI+1))/2.;
 
-	//std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+	std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 
 	for(unsigned int pI = 0; pI < etaPhiTower[rI].size(); ++pI){
 	  if(etaPhiTower[rI][pI].E() > mean[rI] + sigma[rI]){
@@ -828,11 +855,11 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
 	  }
 	}
 
-	//std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+	std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 
       }
 
-      //std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+      std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 
       fastjet::ClusterSequence cs(towerParticles, jet_def);
       std::vector<fastjet::PseudoJet> towerJets = fastjet::sorted_by_pt(cs.inclusive_jets(minRhoJtPt));
@@ -855,7 +882,7 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
 	}
       }      
 
-      //std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+      std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
       
       for(unsigned int pI = 0; pI < particles[entry%nPara].size(); ++pI){
 	Float_t etaVal = particles[entry%nPara][pI].eta();
@@ -882,7 +909,7 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
       }
     }
 
-    //std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+    std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 
     runVect.push_back(run_);
     lumiVect.push_back(lumi_);
@@ -890,7 +917,7 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
     fcalA_etVect.push_back(fcalA_et_);
     fcalC_etVect.push_back(fcalC_et_);
     
-    cent_ = centTable.getCent(fcalA_et_ + fcalC_et_);
+    cent_ = centTable.GetCent(fcalA_et_ + fcalC_et_);
     centVect.push_back(cent_);
     rhoVect.push_back((*rhoOut_p));
     rhoCorrVect.push_back((*rhoCorrOut_p));
@@ -1179,7 +1206,7 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
       rhoVect.clear();
       rhoCorrVect.clear();
 
-      //std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+      std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 
       for(Int_t pI = 0; pI < nPara; ++pI){
 	particles[pI].clear();
@@ -1189,7 +1216,7 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
     }
   }
 
-  //std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+  std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 
   postLoop.start();
   
@@ -1261,7 +1288,7 @@ int clusterToCS(std::string inFileName, std::string inATLASFileName = "", std::s
 int main(int argc, char* argv[])
 {
   if(argc < 2 || argc > 5){
-    std::cout << "Usage: ./bin/clusterToCS.exe <inFileName> <inATLASFileName-default=\'\'> <caloTrackStr-default=\'calo\'> <jzStr-default=\'\'>" << std::endl;
+    std::cout << "Usage: ./bin/clusterToCS.exe <inFileName> <inATLASFileName-default=\'\'> <caloTrackStr-default=\'trk\'> <jzStr-default=\'\'>" << std::endl;
     return 1;
   }
 

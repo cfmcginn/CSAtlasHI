@@ -1,6 +1,6 @@
 #This is a comment
 
-INFILENAME,/atlasgpfs01/usatlas/data/cfmcginn/ATLASNTuples/QT/user.cmcginn.GDJ.20200604.Job89.mc16_5TeV.Pythia8EvtGenOverlay_IncJZ1R04_testPYTHIAOverlay18_IncJZ1.root/user.cmcginn.21507280._000001.testPYTHIAOverlay18_IncJZ1.root
+INFILENAME,/atlasgpfs01/usatlas/data/cfmcginn/ATLASNTuples/QT/user.cmcginn.GDJ.20200604.Job90.mc16_5TeV.Pythia8EvtGenOverlay_IncJZ2R04_testPYTHIAOverlay18_IncJZ2.root/user.cmcginn.21507293._000001.testPYTHIAOverlay18_IncJZ2.root
 OUTFILENAME,test.root
 CENTFILENAME,input/centrality_cuts_Gv32_proposed_RCMOD2.txt
 

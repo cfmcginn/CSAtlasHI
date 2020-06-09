@@ -45,7 +45,7 @@ MKDIR_OBJ=mkdir -p $(QTDIR)/obj
 MKDIR_OUTPUT=mkdir -p $(QTDIR)/output
 MKDIR_PDF=mkdir -p $(QTDIR)/pdfDir
 
-all: mkdirBin mkdirLib mkdirObj mkdirOutput mkdirPdf obj/checkMakeDir.o obj/constituentBuilder.o obj/globalDebugHandler.o obj/rhoBuilder.o obj/sampleHandler.o obj/configParser.o obj/centralityFromInput.o obj/towerWeightTwol.o lib/libCSATLAS.so bin/makeClusterTree.exe bin/makeClusterHist.exe bin/plotClusterHist.exe bin/deriveSampleWeights.exe bin/deriveCentWeights.exe bin/validateRho.exe bin/validateRhoHist.exe bin/validateRhoPlot.exe
+all: mkdirBin mkdirLib mkdirObj mkdirOutput mkdirPdf obj/checkMakeDir.o obj/constituentBuilder.o obj/globalDebugHandler.o obj/rhoBuilder.o obj/sampleHandler.o obj/configParser.o obj/centralityFromInput.o obj/towerWeightTwol.o lib/libCSATLAS.so bin/makeClusterTree.exe bin/makeClusterHist.exe bin/plotClusterHist.exe bin/deriveSampleWeights.exe bin/deriveCentWeights.exe bin/validateRho.exe bin/validateRhoHist.exe bin/validateRhoPlot.exe bin/clusterToCS.exe
 
 mkdirBin:
 	$(MKDIR_BIN)
@@ -97,7 +97,7 @@ bin/makeClusterTree.exe: src/makeClusterTree.C
 	$(CXX) $(CXXFLAGS) src/makeClusterTree.C -o bin/makeClusterTree.exe $(FJCONTRIB) $(FASTJET) $(ROOT) $(INCLUDE) $(LIB) -lCSATLAS
 
 bin/clusterToCS.exe: src/clusterToCS.C
-	$(CXX) $(CXXFLAGS) src/clusterToCS.C $(ROOT) $(FJCONTRIB) $(FASTJET) $(INCLUDE) -fopenmp -o bin/clusterToCS.exe
+	$(CXX) $(CXXFLAGS) src/clusterToCS.C $(ROOT) $(FJCONTRIB) $(FASTJET) $(INCLUDE) $(LIB) -lCSATLAS -fopenmp -o bin/clusterToCS.exe
 
 bin/makeClusterHist.exe: src/makeClusterHist.C
 	$(CXX) $(CXXFLAGS) src/makeClusterHist.C $(ROOT) $(INCLUDE) $(LIB) -lCSATLAS -o bin/makeClusterHist.exe

@@ -7,104 +7,153 @@
 
 //ROOT
 #include "TDirectoryFile.h"
+#include "TEnv.h"
 #include "TFile.h"
 #include "TH1D.h"
 #include "TMath.h"
-#include "TNamed.h"
 #include "TTree.h"
 
 //Local
 #include "include/checkMakeDir.h"
 #include "include/etaPhiFunc.h"
 #include "include/getLogBins.h"
+#include "include/globalDebugHandler.h"
 #include "include/histDefUtility.h"
+#include "include/ncollFunctions_5TeV.h"
 #include "include/plotUtilities.h"
 #include "include/returnRootFileContentsList.h"
+#include "include/sharedFunctions.h"
 #include "include/stringUtil.h"
 
-int makeClusterHist(std::string inFileName, std::string jzWeightsName = "", std::string centWeightsName = "")
+int makeClusterHist(std::string inConfigFileName)
 {
+  globalDebugHandler gDebug;
+  const bool doDebug = gDebug.GetDoGlobalDebug();
+
   checkMakeDir check;
-  if(!check.checkFileExt(inFileName, "root")) return 1;
-  const bool doJZWeights = check.checkFileExt(jzWeightsName, "txt");
-  const bool doCentWeights = check.checkFileExt(centWeightsName, "txt");
-  std::map<std::string, double> jzWeightMap;
-  if(doJZWeights){
-    std::ifstream inFile(jzWeightsName.c_str());
-    std::string tempStr;
-    while(std::getline(inFile, tempStr)){
-      if(tempStr.size() == 0) continue;
-      std::vector<std::string> tempVect = commaSepStringToVect(tempStr);
-      if(tempVect.size() == 0) continue;
-      if(tempVect[0].size() == 0) continue;
-      if(tempVect[0].substr(0, 1).find("#") != std::string::npos) continue;
+  if(!check.checkFileExt(inConfigFileName, ".config")) return 1;
 
-      jzWeightMap[tempVect[0]] = std::stod(tempVect[1]);
-    }
-    inFile.close();
+  TEnv* inConfig_p = new TEnv(inConfigFileName.c_str());
+  std::vector<std::string> reqParams = {"INFILENAME",
+					"DOJZWEIGHTS",
+					"DOCENTWEIGHTS"};
 
-    std::cout << "WEIGHTS: " << std::endl;
-    for(auto const& iter : jzWeightMap){
-      std::cout << " " << iter.first << ", " << iter.second << std::endl;
-    }
-  }
+  if(!checkConfigContainsParams(inConfig_p, reqParams)) return 1;
 
+  const std::string inFileName = inConfig_p->GetValue("INFILENAME", "");
+  const bool doJZWeights = inConfig_p->GetValue("DOJZWEIGHTS", 0);
+  const bool doCentWeights = inConfig_p->GetValue("DOCENTWEIGHTS", 0);
+
+  TEnv* outEnv_p = new TEnv();
+  outEnv_p->SetValue("DOJZWEIGHTS", doJZWeights);
+  outEnv_p->SetValue("DOCENTWEIGHTS", doCentWeights);
+
+  if(doDebug) std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+
+  std::map<int, double> jzWeightMap;
   std::map<int, double> centWeightMap;
   if(doCentWeights){
-    std::ifstream inFile(centWeightsName.c_str());
-    std::string tempStr;
-    while(std::getline(inFile, tempStr)){
-      if(tempStr.size() == 0) continue;
-      std::vector<std::string> tempVect = commaSepStringToVect(tempStr);
-      if(tempVect.size() == 0) continue;
-      if(tempVect[0].size() == 0) continue;
-      if(tempVect[0].substr(0, 1).find("#") != std::string::npos) continue;
-
-      centWeightMap[std::stoi(tempVect[0])] = std::stod(tempVect[2]);
-    }
-    inFile.close();
-
-    std::cout << "WEIGHTS: " << std::endl;
-    for(auto const& iter : centWeightMap){
-      std::cout << " " << iter.first << ", " << iter.second << std::endl;
+    double centNorm = findAvgNColl_Cent(0,1);
+    for(int i = 0; i < 100; ++i){
+      double weight = findAvgNColl_Cent(i, i+1);
+      centWeightMap[i] = weight/centNorm;
     }
   }
 
   TFile* inFile_p = new TFile(inFileName.c_str(), "READ");
-  std::vector<std::string> tnamedList = returnRootFileContentsList(inFile_p, "TNamed");
-  std::map<std::string, std::string> tnamedMap;
-  for(auto const& iter : tnamedList){
-    TNamed* tempName_p = (TNamed*)inFile_p->Get(iter.c_str());
-    tnamedMap[tempName_p->GetName()] = tempName_p->GetTitle();
+  TEnv* fileConfig_p = (TEnv*)inFile_p->Get("config");
+
+  std::vector<std::string> reqParamsFile = {"NJTALGO",
+					    "JTALGOS",
+					    "ISMC",
+					    "RECOJTMINPT"};
+
+  if(doDebug) std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+
+  const Int_t nMaxJtAlgo = 20;
+  const Int_t nJtAlgo = fileConfig_p->GetValue("NJTALGO", 0);
+  std::string jtAlgosStr = fileConfig_p->GetValue("JTALGOS", "");
+  std::vector<std::string> jtAlgos = commaSepStringToVect(jtAlgosStr);
+  const bool isMC = fileConfig_p->GetValue("ISMC", 0);
+
+  const double minJtPt = fileConfig_p->GetValue("RECOJTMINPT", 0.0);
+
+  outEnv_p->SetValue("NJTALGO", nJtAlgo);
+  outEnv_p->SetValue("JTALGOS", jtAlgosStr.c_str());
+  outEnv_p->SetValue("ISMC", isMC);
+ 
+  std::vector<double> uniqueXSec;
+  std::vector<double> uniqueFilterEff;
+  std::map<int, unsigned long long> xSecCounter;
+  std::map<int, unsigned long long> centCounter;
+  for(int i = 0; i < 100; ++i){
+    centCounter[i] = 0;
   }
+
+  Float_t cent_;
+  Float_t xSectionNB_;
+  Float_t filterEff_;
+  
+  TTree* csTree_p = (TTree*)inFile_p->Get("clusterJetsCS");
+  const Int_t nEntries = csTree_p->GetEntries();
+  if(isMC && (doJZWeights || doCentWeights)){
+    csTree_p->SetBranchStatus("*", 0);
+
+    if(doCentWeights) csTree_p->SetBranchStatus("cent", 1);
+    if(doJZWeights){
+      csTree_p->SetBranchStatus("xSectionNB", 1);
+      csTree_p->SetBranchStatus("filterEff", 1);
+    }
+
+    if(doCentWeights) csTree_p->SetBranchAddress("cent", &cent_);
+    if(doJZWeights){
+      csTree_p->SetBranchAddress("xSectionNB", &xSectionNB_);
+      csTree_p->SetBranchAddress("filterEff", &filterEff_);
+    }
+
+    for(Int_t entry = 0; entry < nEntries; ++entry){
+      csTree_p->GetEntry(entry);
+      
+      if(doJZWeights){
+	int xsecPos = -1;
+	for(unsigned int xI = 0; xI < uniqueXSec.size(); ++xI){
+	  if(TMath::Abs(uniqueXSec[xI] - xSectionNB_) < 0.1){
+	    if(TMath::Abs(uniqueFilterEff[xI] - filterEff_) < 0.00001){
+	      xsecPos = xI;
+	      break;
+	    }
+	  }
+	}
+	
+	if(xsecPos >= 0) ++(xSecCounter[xsecPos]);
+	else{
+	  xSecCounter[uniqueXSec.size()] = 1;
+	  uniqueXSec.push_back(xSectionNB_);
+	  uniqueFilterEff.push_back(filterEff_);
+	}
+      }
+
+      if(doCentWeights){
+	int centInt = (int)cent_;
+	++(centCounter[centInt]);
+      }
+    }
+
+    if(doJZWeights){
+      std::cout << "JZ WEIGHTS: " << std::endl;
+      for(unsigned int xI = 0; xI < uniqueXSec.size(); ++xI){
+	jzWeightMap[xI] = uniqueXSec[xI]*uniqueFilterEff[xI]/xSecCounter[xI];
+	
+	std::cout << " " << xI << ": " << uniqueXSec[xI] << "*" << uniqueFilterEff[xI] << "/" << xSecCounter[xI] << "=" << jzWeightMap[xI] << std::endl; 
+      }
+    }
+  }
+
   inFile_p->Close();
-  delete inFile_p;
+  delete inFile_p;  
 
-  for(auto const & iter : tnamedMap){
-    std::cout << iter.first << ", " << iter.second << std::endl;
-  }
+  if(doDebug) std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 
-  if(tnamedMap.count("nEvents") == 0){
-    std::cout << "Parameter \'nEvents\' not found in input paramMap. return 1" << std::endl;
-    return 1;
-  }
-  else if(tnamedMap.count("nJtAlgo") == 0){
-    std::cout << "Parameter \'nJtAlgo\' not found in input paramMap. return 1" << std::endl;
-    return 1;
-  }
-  else if(tnamedMap.count("jtAlgos") == 0){
-    std::cout << "Parameter \'jtAlgos\' not found in input paramMap. return 1" << std::endl;
-    return 1;
-  }
-
-  const std::string caloTrkStr = tnamedMap["caloTrackStr"];
-  
-  const bool doATLAS = std::stoi(tnamedMap["doATLAS"]);
-  const bool doTruth = std::stoi(tnamedMap["doTruth"]);
-  
-  const Int_t nMaxJtAlgo = 8;
-  const Int_t nJtAlgo = std::stoi(tnamedMap["nJtAlgo"]);
-  std::vector<std::string> jtAlgos = commaSepStringToVect(tnamedMap["jtAlgos"]);
 
   if(nJtAlgo != (Int_t)jtAlgos.size()){
     std::cout << "Mismatch between nJtAlgo \'" << nJtAlgo << "\' and jtAlgos.size() \'" << jtAlgos.size() << "\'. return 1" << std::endl;
@@ -115,6 +164,8 @@ int makeClusterHist(std::string inFileName, std::string jzWeightsName = "", std:
 
   check.doCheckMakeDir("output");
   check.doCheckMakeDir("output/" + dateStr);
+
+  if(doDebug) std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
   
   std::string outFileName = inFileName.substr(0, inFileName.find(".root"));
   while(outFileName.find("/") != std::string::npos){outFileName.replace(0, outFileName.find("/")+1, "");}
@@ -130,7 +181,9 @@ int makeClusterHist(std::string inFileName, std::string jzWeightsName = "", std:
     nEventPerCent[cI] = 0;
   }
 
-  const Float_t maxJtAbsEta = 2.4;//std::stod(tnamedMap["maxJtAbsEta"]);
+  if(doDebug) std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+
+  const Float_t maxJtAbsEta = 2.4;
   
   const Int_t nJtPtBins = 12;
   Float_t jtPtLow = 30;
@@ -138,31 +191,38 @@ int makeClusterHist(std::string inFileName, std::string jzWeightsName = "", std:
   Double_t jtPtBins[nJtPtBins+1];
   getLogBins(jtPtLow, jtPtHigh, nJtPtBins, jtPtBins);
   std::vector<std::string> jtPtBinsStrVect;
+
+  if(doDebug) std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
   
   TFile* outFile_p = new TFile(outFileName.c_str(), "RECREATE");
   TH1D* cent_p = new TH1D("cent_h", ";Centrality (%);Weighted Counts", 100, -0.5, 99.5);
-  centerTitles(cent_p);
-  TH1D* spectra_p[nMaxJtAlgo+2][nCentBins];
-  TH1D* matchedATLASSpectra_p[nMaxJtAlgo][nCentBins];
+  TH1D* cent_Unweighted_p = new TH1D("cent_Unweighted_h", ";Centrality (%);Unweighted Counts", 100, -0.5, 99.5);
+  centerTitles({cent_p, cent_Unweighted_p});
+
+  TH1D* spectra_p[nMaxJtAlgo+1][nCentBins];
   TH1D* matchedTruthSpectra_p[nMaxJtAlgo][nCentBins];
+  TH1D* spectra_Unweighted_p[nCentBins];
   TH1D* recoOverGen_VPt_p[nMaxJtAlgo][nCentBins][nJtPtBins];
   TH1D* recoGen_DeltaEta_p[nMaxJtAlgo][nCentBins][nJtPtBins];
   TH1D* recoGen_DeltaPhi_p[nMaxJtAlgo][nCentBins][nJtPtBins];
   
-  for(Int_t jI = 0; jI < nJtAlgo+2; ++jI){
+  for(Int_t jI = 0; jI < nJtAlgo+1; ++jI){
     std::string algo = "Truth";
     if(jI < nJtAlgo) algo = jtAlgos[jI];
-    else if(jI == nJtAlgo) algo = "ATLAS";
+    if(!isMC && jI == nJtAlgo) break;
 
-    if(!doATLAS && jI > nJtAlgo) break;
-    if(!doTruth && jI > nJtAlgo+1) break;
-    
     for(Int_t cI = 0; cI < nCentBins; ++cI){
       std::string nameStr = algo + "_" + centBinsStr[cI];
       
       spectra_p[jI][cI] = new TH1D(("spectra_" + nameStr + "_h").c_str(), ";Jet p_{T} [GeV];Counts", nJtPtBins, jtPtBins);
 
-      if(doTruth){
+      if(isMC && jI == nJtAlgo){
+	spectra_Unweighted_p[cI] = new TH1D(("spectra_Unweighted_" + nameStr + "_h").c_str(), ";Jet p_{T} [GeV];Counts", nJtPtBins, jtPtBins);
+	centerTitles(spectra_Unweighted_p[cI]);
+      }
+
+
+      if(isMC){
 	for(Int_t jI2 = 0; jI2 < nJtPtBins; ++jI2){
 	  std::string ptStr = "JtPt" + prettyString(jtPtBins[jI2], 1, true) + "to" + prettyString(jtPtBins[jI2+1], 1, true);
 	  jtPtBinsStrVect.push_back(ptStr);
@@ -172,23 +232,15 @@ int makeClusterHist(std::string inFileName, std::string jzWeightsName = "", std:
 
 	  centerTitles({recoOverGen_VPt_p[jI][cI][jI2], recoGen_DeltaEta_p[jI][cI][jI2], recoGen_DeltaPhi_p[jI][cI][jI2]});
 	}
-      }
-      
-      if(jI < nJtAlgo && doATLAS){
-	matchedATLASSpectra_p[jI][cI] = new TH1D(("matchedATLASSpectra_" + nameStr + "_h").c_str(), ";Jet p_{T} [GeV];Counts w/ ATLAS jet match", nJtPtBins, jtPtBins);
-	if(doTruth){
-	  matchedTruthSpectra_p[jI][cI] = new TH1D(("matchedTruthSpectra_" + nameStr + "_h").c_str(), ";Jet p_{T} [GeV];Counts w/ Truth jet match", nJtPtBins, jtPtBins);
-	  centerTitles(matchedTruthSpectra_p[jI][cI]);
-	}
-	centerTitles(matchedATLASSpectra_p[jI][cI]);
-      }
-     
+
+	matchedTruthSpectra_p[jI][cI] = new TH1D(("matchedTruthSpectra_" + nameStr + "_h").c_str(), ";Jet p_{T} [GeV];Counts w/ Truth jet match", nJtPtBins, jtPtBins);
+	centerTitles(matchedTruthSpectra_p[jI][cI]);      
+      }     
       centerTitles(spectra_p[jI][cI]);
     }
   }
 
-  Int_t jzVal_;
-  Float_t cent_;
+  if(doDebug) std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 
   const Int_t nMaxJets = 500;
   Int_t njt_[nJtAlgo];
@@ -198,26 +250,29 @@ int makeClusterHist(std::string inFileName, std::string jzWeightsName = "", std:
   Int_t atlasmatchpos_[nJtAlgo][nMaxJets];
   Int_t truthmatchpos_[nJtAlgo][nMaxJets];
 
-  Int_t njtATLAS_;
-  Float_t jtptATLAS_[nMaxJets];
-  Float_t jtetaATLAS_[nMaxJets];
-  Float_t jtphiATLAS_[nMaxJets];
-
   Int_t njtTruth_;
   Float_t jtptTruth_[nMaxJets];
-  Float_t jtchgptTruth_[nMaxJets];
+  //  Float_t jtchgptTruth_[nMaxJets];
   Float_t jtetaTruth_[nMaxJets];
   Float_t jtphiTruth_[nMaxJets];
 
   inFile_p = new TFile(inFileName.c_str(), "READ");
-  TTree* csTree_p = (TTree*)inFile_p->Get("clusterJetsCS");
+  csTree_p = (TTree*)inFile_p->Get("clusterJetsCS");
+
+  if(doDebug) std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 
   csTree_p->SetBranchStatus("*", 0);
   csTree_p->SetBranchStatus("cent", 1);
-  if(doJZWeights) csTree_p->SetBranchStatus("jzVal", 1);
+  if(doJZWeights && isMC){
+    csTree_p->SetBranchStatus("xSectionNB", 1);
+    csTree_p->SetBranchStatus("filterEff", 1);
+  }
 
   csTree_p->SetBranchAddress("cent", &cent_);
-  if(doJZWeights) csTree_p->SetBranchAddress("jzVal", &jzVal_);
+  if(doJZWeights && isMC){
+    csTree_p->SetBranchAddress("xSectionNB", &xSectionNB_);
+    csTree_p->SetBranchAddress("filterEff", &filterEff_);
+  }
 
   for(Int_t jI = 0; jI < nJtAlgo; ++jI){
     csTree_p->SetBranchStatus(("njt" + jtAlgos[jI]).c_str(), 1);
@@ -235,33 +290,28 @@ int makeClusterHist(std::string inFileName, std::string jzWeightsName = "", std:
     csTree_p->SetBranchAddress(("truthmatchpos" + jtAlgos[jI]).c_str(), truthmatchpos_[jI]);
   }
 
-  csTree_p->SetBranchStatus("njtATLAS", 1);
-  csTree_p->SetBranchStatus("jtptATLAS", 1);
-  csTree_p->SetBranchStatus("jtetaATLAS", 1);
-  csTree_p->SetBranchStatus("jtphiATLAS", 1);
+  if(doDebug) std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+
   csTree_p->SetBranchStatus("njtTruth", 1);
   csTree_p->SetBranchStatus("jtptTruth", 1);
-  csTree_p->SetBranchStatus("jtchgptTruth", 1);
+  //  csTree_p->SetBranchStatus("jtchgptTruth", 1);
   csTree_p->SetBranchStatus("jtetaTruth", 1);
   csTree_p->SetBranchStatus("jtphiTruth", 1);
   
-  csTree_p->SetBranchAddress("njtATLAS", &njtATLAS_);
-  csTree_p->SetBranchAddress("jtptATLAS", jtptATLAS_);
-  csTree_p->SetBranchAddress("jtetaATLAS", jtetaATLAS_);
-  csTree_p->SetBranchAddress("jtphiATLAS", jtphiATLAS_);
   csTree_p->SetBranchAddress("njtTruth", &njtTruth_);
   csTree_p->SetBranchAddress("jtptTruth", jtptTruth_);
-  csTree_p->SetBranchAddress("jtchgptTruth", jtchgptTruth_);
+  //  csTree_p->SetBranchAddress("jtchgptTruth", jtchgptTruth_);
   csTree_p->SetBranchAddress("jtetaTruth", jtetaTruth_);
   csTree_p->SetBranchAddress("jtphiTruth", jtphiTruth_);
 
-  const Int_t nEntries = csTree_p->GetEntries();
   const Int_t nDiv = TMath::Max(1, nEntries/50);
 
   std::cout << "Processing " << nEntries << " events..." << std::endl;
   for(Int_t entry = 0; entry < nEntries; ++entry){
     if(entry%nDiv == 0) std::cout << " Entry " << entry << "/" << nEntries << "..." << std::endl;
     csTree_p->GetEntry(entry);
+
+  if(doDebug) std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 
     Int_t centPos = -1;
     for(Int_t cI = 0; cI < nCentBins; ++cI){
@@ -272,18 +322,37 @@ int makeClusterHist(std::string inFileName, std::string jzWeightsName = "", std:
     }
     if(centPos < 0) continue;
 
+  if(doDebug) std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+
     Double_t weight = 1.0;
-    if(doJZWeights){
-      std::string jzValStr = "JZ" + std::to_string(jzVal_);
-      if(jzWeightMap.count(jzValStr) == 0) std::cout << "WARNING CANNOT FIND WEIGHT FOR JTVAL \'" << jzValStr << "\'" << std::endl;
-      weight = jzWeightMap[jzValStr];
+    if(doJZWeights && isMC){
+      int xsecPos = -1;
+      for(unsigned int xI = 0; xI < uniqueXSec.size(); ++xI){
+	if(TMath::Abs(uniqueXSec[xI] - xSectionNB_) < 0.1){
+	  if(TMath::Abs(uniqueFilterEff[xI] - filterEff_) < 0.00001){
+	    xsecPos = xI;
+	    break;
+	  }
+	}
+      }
+
+  if(doDebug) std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+
+      if(xsecPos < 0){
+	std::cout << "Couldnt find weight for x-sec/filter eff: " << xSectionNB_ << "/" << filterEff_ << std::endl;
+	return 1;
+      }
+      weight *= jzWeightMap[xsecPos];
     }
     if(doCentWeights){
       int centInt_ = (int)cent_;
-      weight *= centWeightMap[centInt_];
+      weight *= centWeightMap[centInt_]/centCounter[centInt_];
     }
 
     cent_p->Fill(cent_, weight);
+    cent_Unweighted_p->Fill(cent_);
+
+    if(doDebug) std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 
     ++(nEventPerCent[centPos]);
     
@@ -294,81 +363,53 @@ int makeClusterHist(std::string inFileName, std::string jzWeightsName = "", std:
 	if(jtpt_[aI][jI] >= jtPtHigh) continue;
 	
 	spectra_p[aI][centPos]->Fill(jtpt_[aI][jI], weight);
-      }    
-    }
-
-    if(doATLAS){
-      for(Int_t jI = 0; jI < njtATLAS_; ++jI){
-	if(TMath::Abs(jtetaATLAS_[jI]) > maxJtAbsEta) continue;
-	if(jtptATLAS_[jI] < jtPtLow) continue;
-	if(jtptATLAS_[jI] >= jtPtHigh) continue;
-	
-	spectra_p[nJtAlgo][centPos]->Fill(jtptATLAS_[jI], weight);
-	
-	for(Int_t aI = 0; aI < nJtAlgo; ++aI){
-	  //	  bool isFilled = false;
-	  
-	  for(Int_t jI2 = 0; jI2 < njt_[aI]; ++jI2){
-	    if(atlasmatchpos_[aI][jI2] == jI){
-	      matchedATLASSpectra_p[aI][centPos]->Fill(jtpt_[aI][jI2], weight);
-	      //      isFilled = true;
-	      break;
-	    }
-	  }
-
-	  /*	  
-	  if(!isFilled && jtptATLAS_[jI] > 80.){
-	    std::cout << "NO MATCH IN ALGO " << jtAlgos[aI] << " (entry, ptATLAS): " << entry << ", " << jtptATLAS_[jI] << std::endl;
-	  }
-	  */
-	}
+      
       }
-
-      if(doTruth){
-	if(isStrSame(caloTrkStr, "trk")){
-	  for(Int_t jI = 0; jI < njtTruth_; ++jI){
-	    jtptTruth_[jI] = jtchgptTruth_[jI];
+    }
+    
+    if(doDebug) std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+    
+    if(isMC){
+      if(doDebug) std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+      for(Int_t jI = 0; jI < njtTruth_; ++jI){
+	if(TMath::Abs(jtetaTruth_[jI]) > maxJtAbsEta) continue;
+	if(jtptTruth_[jI] < jtPtLow) continue;
+	if(jtptTruth_[jI] >= jtPtHigh) continue;
+	
+	if(doDebug) std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+	Int_t jtPos = -1;
+	for(Int_t jI2 = 0; jI2 < nJtPtBins; ++jI2){
+	  if(jtptTruth_[jI] >= jtPtBins[jI2] && jtptTruth_[jI] < jtPtBins[jI2+1]){
+	    jtPos = jI2;
+	    break;
 	  }
 	}
+	if(jtPos == -1 && jtptTruth_[jI] == jtPtBins[nJtPtBins]) jtPos = nJtPtBins-1;
+	  
+	
+	spectra_p[nJtAlgo][centPos]->Fill(jtptTruth_[jI], weight);
+	spectra_Unweighted_p[centPos]->Fill(jtptTruth_[jI]);
 
-	for(Int_t jI = 0; jI < njtTruth_; ++jI){
-	  if(TMath::Abs(jtetaTruth_[jI]) > maxJtAbsEta) continue;
-	  if(jtptTruth_[jI] < jtPtLow) continue;
-	  if(jtptTruth_[jI] >= jtPtHigh) continue;
 
-	  Int_t jtPos = -1;
-	  for(Int_t jI2 = 0; jI2 < nJtPtBins; ++jI2){
-	    if(jtptTruth_[jI] >= jtPtBins[jI2] && jtptTruth_[jI] < jtPtBins[jI2+1]){
-	      jtPos = jI2;
+	if(doDebug) std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+	  	  
+	for(Int_t aI = 0; aI < nJtAlgo; ++aI){
+	  for(Int_t jI2 = 0; jI2 < njt_[aI]; ++jI2){
+	    if(truthmatchpos_[aI][jI2] == jI){
+	      matchedTruthSpectra_p[aI][centPos]->Fill(jtptTruth_[jI], weight);
+	      recoOverGen_VPt_p[aI][centPos][jtPos]->Fill(jtpt_[aI][jI2]/jtptTruth_[jI], weight);
+	      recoGen_DeltaEta_p[aI][centPos][jtPos]->Fill(jteta_[aI][jI2] - jtetaTruth_[jI], weight);
+	      recoGen_DeltaPhi_p[aI][centPos][jtPos]->Fill(getDPHI(jtphi_[aI][jI2], jtphiTruth_[jI]), weight);
 	      break;
 	    }
 	  }
-	  if(jtPos == -1 && jtptTruth_[jI] == jtPtBins[nJtPtBins]) jtPos = nJtPtBins-1;
-	  
-	  spectra_p[nJtAlgo+1][centPos]->Fill(jtptTruth_[jI], weight);
-	  	  
-	  for(Int_t aI = 0; aI < nJtAlgo; ++aI){
-	    bool isFilled = false;
-	    
-	    for(Int_t jI2 = 0; jI2 < njt_[aI]; ++jI2){
-	      if(truthmatchpos_[aI][jI2] == jI){
-		matchedTruthSpectra_p[aI][centPos]->Fill(jtptTruth_[jI], weight);
-		recoOverGen_VPt_p[aI][centPos][jtPos]->Fill(jtpt_[aI][jI2]/jtptTruth_[jI], weight);
-		recoGen_DeltaEta_p[aI][centPos][jtPos]->Fill(jteta_[aI][jI2] - jtetaTruth_[jI], weight);
-		recoGen_DeltaPhi_p[aI][centPos][jtPos]->Fill(getDPHI(jtphi_[aI][jI2], jtphiTruth_[jI]), weight);
-		isFilled = true;
-		break;
-	      }
-	    }
-	    
-	    if(!isFilled && jtptTruth_[jI] > 80.){
-	      std::cout << "NO MATCH IN ALGO " << jtAlgos[aI] << " (entry, ptTruth): " << entry << ", " << jtptTruth_[jI] << std::endl;
-	    }
-	  }
+	  if(doDebug) std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 	}
       }
     }
   }
+
+  if(doDebug) std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
   
   inFile_p->Close();
   delete inFile_p;
@@ -378,41 +419,41 @@ int makeClusterHist(std::string inFileName, std::string jzWeightsName = "", std:
   cent_p->Write("", TObject::kOverwrite);
   delete cent_p;
 
-  for(Int_t aI = 0; aI < nJtAlgo+2; ++aI){
-    if(!doATLAS && aI > nJtAlgo) break;
-    if(!doTruth && aI > nJtAlgo+1) break;
+  cent_Unweighted_p->Write("", TObject::kOverwrite);
+  delete cent_Unweighted_p;
+
+  for(Int_t aI = 0; aI < nJtAlgo+1; ++aI){
+    if(!isMC && aI == nJtAlgo) break;
+
     
     for(Int_t cI = 0; cI < nCentBins; ++cI){
       spectra_p[aI][cI]->Write("", TObject::kOverwrite);
       delete spectra_p[aI][cI];
 
-      if(aI < nJtAlgo){
-	if(doATLAS){
-	  matchedATLASSpectra_p[aI][cI]->Write("", TObject::kOverwrite);
-	  delete matchedATLASSpectra_p[aI][cI];
+      if(aI == nJtAlgo){
+	spectra_Unweighted_p[cI]->Write("", TObject::kOverwrite);
+	delete spectra_Unweighted_p[cI];
+      }
 
-	  if(doTruth){
-	    matchedTruthSpectra_p[aI][cI]->Write("", TObject::kOverwrite);
-	    delete matchedTruthSpectra_p[aI][cI];
+      if(aI < nJtAlgo && isMC){
+	matchedTruthSpectra_p[aI][cI]->Write("", TObject::kOverwrite);
+	delete matchedTruthSpectra_p[aI][cI];
 
-	    for(Int_t jI = 0; jI < nJtPtBins; ++jI){
-	      recoOverGen_VPt_p[aI][cI][jI]->Write("", TObject::kOverwrite);
-	      delete recoOverGen_VPt_p[aI][cI][jI];
 
-	      recoGen_DeltaEta_p[aI][cI][jI]->Write("", TObject::kOverwrite);
-	      delete recoGen_DeltaEta_p[aI][cI][jI];
-
-	      recoGen_DeltaPhi_p[aI][cI][jI]->Write("", TObject::kOverwrite);
-	      delete recoGen_DeltaPhi_p[aI][cI][jI];
-	    }
-	  }
+	for(Int_t jI = 0; jI < nJtPtBins; ++jI){
+	  recoOverGen_VPt_p[aI][cI][jI]->Write("", TObject::kOverwrite);
+	  delete recoOverGen_VPt_p[aI][cI][jI];
+	  
+	  recoGen_DeltaEta_p[aI][cI][jI]->Write("", TObject::kOverwrite);
+	  delete recoGen_DeltaEta_p[aI][cI][jI];
+	  
+	  recoGen_DeltaPhi_p[aI][cI][jI]->Write("", TObject::kOverwrite);
+	  delete recoGen_DeltaPhi_p[aI][cI][jI];
 	}
       }
     }
   }
 
-  TDirectoryFile* params_p = (TDirectoryFile*)outFile_p->mkdir("params");
-  params_p->cd();
 
   std::string jtPtBinsStr = "";
   std::string jtPtBinsStr2 = "";
@@ -420,6 +461,8 @@ int makeClusterHist(std::string inFileName, std::string jzWeightsName = "", std:
     jtPtBinsStr = jtPtBinsStr + prettyString(jtPtBins[jI], 1, false) + ",";
     if(jI != nJtPtBins) jtPtBinsStr2 = jtPtBinsStr2 + jtPtBinsStrVect[jI] + ",";
   }
+
+  if(doDebug) std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
   
   std::string centBinsLowStr = "";
   std::string centBinsHighStr = "";
@@ -431,35 +474,20 @@ int makeClusterHist(std::string inFileName, std::string jzWeightsName = "", std:
     centBinsStr2 = centBinsStr2 + centBinsStr[cI] + ",";
     nEventPerCentStr = nEventPerCentStr + std::to_string(nEventPerCent[cI]) + ",";
   }
-
-  std::string jtAlgos2 = "";
-  for(Int_t aI = 0; aI < nJtAlgo+1; ++aI){
-    std::string algo = "ATLAS";
-    if(aI < nJtAlgo) algo = jtAlgos[aI];
-
-    jtAlgos2 = jtAlgos2 + algo + ",";
-  }
   
-  std::map<std::string, std::string> paramMap;
-  paramMap["nJtPtBins"] = std::to_string(nJtPtBins);
-  paramMap["jtPtBins"] = jtPtBinsStr;
-  paramMap["jtPtBinsStr"] = jtPtBinsStr2;
+  outEnv_p->SetValue("NJTPTBINS", nJtPtBins);
+  outEnv_p->SetValue("JTPTBINS", jtPtBinsStr.c_str());
+  outEnv_p->SetValue("JTPTBINSSTR", jtPtBinsStr2.c_str());
 
-  paramMap["nCentBins"] = std::to_string(nCentBins);
-  paramMap["centBinsLow"] = centBinsLowStr;
-  paramMap["centBinsHigh"] = centBinsHighStr;
-  paramMap["centBinsStr"] = centBinsStr2;
-  paramMap["nEventPerCent"] = nEventPerCentStr;
-  paramMap["maxJtAbsEta"] = prettyString(maxJtAbsEta, 2, false);
+  outEnv_p->SetValue("NCENTBINS", nCentBins);
+  outEnv_p->SetValue("CENTBINSLOW", centBinsLowStr.c_str());
+  outEnv_p->SetValue("CENTBINSHIGH", centBinsHighStr.c_str());
+  outEnv_p->SetValue("CENTBINSSTR", centBinsStr2.c_str());
+  outEnv_p->SetValue("NEVENTPERCENT", nEventPerCentStr.c_str());
+  outEnv_p->SetValue("MAXJTABSETA", maxJtAbsEta);
+  outEnv_p->SetValue("MINJTPT", minJtPt);
 
-  for(auto const & iter : tnamedMap){paramMap[iter.first] = iter.second;}
-  paramMap["nJtAlgo"] = std::to_string(nJtAlgo);
-  paramMap["jtAlgos"] = jtAlgos2;
-
-  for(auto const & iter : paramMap){
-    TNamed tempName(iter.first.c_str(), iter.second.c_str());
-    tempName.Write("", TObject::kOverwrite);
-  }
+  outEnv_p->Write("config", TObject::kOverwrite);
   
   outFile_p->Close();
   delete outFile_p;    
@@ -469,14 +497,16 @@ int makeClusterHist(std::string inFileName, std::string jzWeightsName = "", std:
 
 int main(int argc, char* argv[])
 {
-  if(argc < 2 || argc > 4){
-    std::cout << "Usage: ./bin/makeClusterHist.exe <inFileName> <jzWeightsName-default=\'\'> <centWeightsName-default=\'\'>. return 1" << std::endl;
+  if(argc != 2){
+    std::cout << "Usage: ./bin/makeClusterHist.exe <inConfigFileName>" << std::endl;
+    std::cout << " export DOGLOBALDEBUGROOT=1 #from command line" << std::endl;
+    std::cout << "TO TURN OFF DEBUG:" << std::endl;
+    std::cout << " export DOGLOBALDEBUGROOT=0 #from command line" << std::endl;
+    std::cout << "return 1." << std::endl;
     return 1;
   }
   
   int retVal = 0;
   if(argc == 2) retVal += makeClusterHist(argv[1]);
-  else if(argc == 3) retVal += makeClusterHist(argv[1], argv[2]);
-  else if(argc == 4) retVal += makeClusterHist(argv[1], argv[2], argv[3]);
   return retVal;
 }
