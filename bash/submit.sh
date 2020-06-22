@@ -16,7 +16,7 @@ sed -i -e "s@Queue@@g" $cFile2
 
 files=()
 
-mainInput=input/rucioJZAllFiles_TEST_20200604.txt
+mainInput=input/rucioJZAllFiles_20200604.txt
 
 for i in include/*.h
 do

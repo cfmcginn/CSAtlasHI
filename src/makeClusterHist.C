@@ -186,7 +186,7 @@ int makeClusterHist(std::string inConfigFileName)
   const Float_t maxJtAbsEta = 2.4;
   
   const Int_t nJtPtBins = 12;
-  Float_t jtPtLow = 30;
+  Float_t jtPtLow = 20;
   Float_t jtPtHigh = 400;
   Double_t jtPtBins[nJtPtBins+1];
   getLogBins(jtPtLow, jtPtHigh, nJtPtBins, jtPtBins);
@@ -200,9 +200,13 @@ int makeClusterHist(std::string inConfigFileName)
   centerTitles({cent_p, cent_Unweighted_p});
 
   TH1D* spectra_p[nMaxJtAlgo+1][nCentBins];
+  TH1D* spectraUnmatched_p[nMaxJtAlgo][nCentBins];
+  TH1D* spectraChg_p[nCentBins];
   TH1D* matchedTruthSpectra_p[nMaxJtAlgo][nCentBins];
   TH1D* spectra_Unweighted_p[nCentBins];
   TH1D* recoOverGen_VPt_p[nMaxJtAlgo][nCentBins][nJtPtBins];
+  TH1D* recoOverGenM_VPt_p[nMaxJtAlgo][nCentBins][nJtPtBins];
+  TH1D* recoOverGenMOverPt_VPt_p[nMaxJtAlgo][nCentBins][nJtPtBins];
   TH1D* recoGen_DeltaEta_p[nMaxJtAlgo][nCentBins][nJtPtBins];
   TH1D* recoGen_DeltaPhi_p[nMaxJtAlgo][nCentBins][nJtPtBins];
   
@@ -215,6 +219,14 @@ int makeClusterHist(std::string inConfigFileName)
       std::string nameStr = algo + "_" + centBinsStr[cI];
       
       spectra_p[jI][cI] = new TH1D(("spectra_" + nameStr + "_h").c_str(), ";Jet p_{T} [GeV];Counts", nJtPtBins, jtPtBins);
+      if(jI == nJtAlgo){
+	spectraChg_p[cI] = new TH1D(("spectraChg_" + nameStr + "_h").c_str(), ";Charge Jet p_{T} [GeV];Counts", nJtPtBins, jtPtBins);
+	centerTitles(spectraChg_p[cI]);
+      }
+      else{
+	spectraUnmatched_p[jI][cI] = new TH1D(("spectraUnmatched_" + nameStr + "_h").c_str(), ";Charge Jet p_{T} [GeV];Counts", nJtPtBins, jtPtBins);
+	centerTitles(spectraUnmatched_p[jI][cI]);
+      }
 
       if(isMC && jI == nJtAlgo){
 	spectra_Unweighted_p[cI] = new TH1D(("spectra_Unweighted_" + nameStr + "_h").c_str(), ";Jet p_{T} [GeV];Counts", nJtPtBins, jtPtBins);
@@ -227,14 +239,16 @@ int makeClusterHist(std::string inConfigFileName)
 	  std::string ptStr = "JtPt" + prettyString(jtPtBins[jI2], 1, true) + "to" + prettyString(jtPtBins[jI2+1], 1, true);
 	  jtPtBinsStrVect.push_back(ptStr);
 	  recoOverGen_VPt_p[jI][cI][jI2] = new TH1D(("recoOverGen_VPt_" + nameStr + "_" + ptStr + "_h").c_str(), ";Reco./Gen.;Counts", 21, 0.0, 2.0);
+	  recoOverGenM_VPt_p[jI][cI][jI2] = new TH1D(("recoOverGenM_VPt_" + nameStr + "_" + ptStr + "_h").c_str(), ";Reco. Mass/Gen. Mass;Counts", 21, 0.0, 2.0);
+	  recoOverGenMOverPt_VPt_p[jI][cI][jI2] = new TH1D(("recoOverGenMOverPt_VPt_" + nameStr + "_" + ptStr + "_h").c_str(), ";(Reco. M/p_{T})/(Gen. M/p_{T});Counts", 21, 0.0, 2.0);
 	  recoGen_DeltaEta_p[jI][cI][jI2] = new TH1D(("recoGen_DeltaEta_" + nameStr + "_" + ptStr + "_h").c_str(), ";#eta_{Reco.} - #eta_{Gen.};Counts", 21, -0.3, 0.3);
 	  recoGen_DeltaPhi_p[jI][cI][jI2] = new TH1D(("recoGen_DeltaPhi_" + nameStr + "_" + ptStr + "_h").c_str(), ";#phi_{Reco.} - #phi_{Gen.};Counts", 21, -0.3, 0.3);
 
-	  centerTitles({recoOverGen_VPt_p[jI][cI][jI2], recoGen_DeltaEta_p[jI][cI][jI2], recoGen_DeltaPhi_p[jI][cI][jI2]});
+	  centerTitles({recoOverGen_VPt_p[jI][cI][jI2], recoOverGenM_VPt_p[jI][cI][jI2], recoOverGenMOverPt_VPt_p[jI][cI][jI2], recoGen_DeltaEta_p[jI][cI][jI2], recoGen_DeltaPhi_p[jI][cI][jI2]});
 	}
 
 	matchedTruthSpectra_p[jI][cI] = new TH1D(("matchedTruthSpectra_" + nameStr + "_h").c_str(), ";Jet p_{T} [GeV];Counts w/ Truth jet match", nJtPtBins, jtPtBins);
-	centerTitles(matchedTruthSpectra_p[jI][cI]);      
+	centerTitles({matchedTruthSpectra_p[jI][cI]});      
       }     
       centerTitles(spectra_p[jI][cI]);
     }
@@ -243,18 +257,28 @@ int makeClusterHist(std::string inConfigFileName)
   if(doDebug) std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 
   const Int_t nMaxJets = 500;
-  Int_t njt_[nJtAlgo];
-  Float_t jtpt_[nJtAlgo][nMaxJets];
-  Float_t jteta_[nJtAlgo][nMaxJets];
-  Float_t jtphi_[nJtAlgo][nMaxJets];
-  Int_t atlasmatchpos_[nJtAlgo][nMaxJets];
-  Int_t truthmatchpos_[nJtAlgo][nMaxJets];
+  Int_t njt_[nMaxJtAlgo];
+  Float_t jtpt_[nMaxJtAlgo][nMaxJets];
+  Float_t jteta_[nMaxJtAlgo][nMaxJets];
+  Float_t jtphi_[nMaxJtAlgo][nMaxJets];
+  Float_t jtm_[nMaxJtAlgo][nMaxJets];
+  Int_t atlasmatchpos_[nMaxJtAlgo][nMaxJets];
+  Int_t truthmatchpos_[nMaxJtAlgo][nMaxJets];
+  Int_t chgtruthmatchpos_[nMaxJtAlgo][nMaxJets];
 
   Int_t njtTruth_;
   Float_t jtptTruth_[nMaxJets];
-  //  Float_t jtchgptTruth_[nMaxJets];
   Float_t jtetaTruth_[nMaxJets];
   Float_t jtphiTruth_[nMaxJets];
+  Float_t jtmTruth_[nMaxJets];
+  Int_t jtmatchposTruth_[nMaxJtAlgo][nMaxJets];
+
+  Int_t nchgjtTruth_;
+  Float_t chgjtptTruth_[nMaxJets];
+  Float_t chgjtetaTruth_[nMaxJets];
+  Float_t chgjtphiTruth_[nMaxJets];
+  Float_t chgjtmTruth_[nMaxJets];
+  Int_t chgjtmatchposTruth_[nMaxJtAlgo][nMaxJets];
 
   inFile_p = new TFile(inFileName.c_str(), "READ");
   csTree_p = (TTree*)inFile_p->Get("clusterJetsCS");
@@ -279,30 +303,59 @@ int makeClusterHist(std::string inConfigFileName)
     csTree_p->SetBranchStatus(("jtpt" + jtAlgos[jI]).c_str(), 1);
     csTree_p->SetBranchStatus(("jteta" + jtAlgos[jI]).c_str(), 1);
     csTree_p->SetBranchStatus(("jtphi" + jtAlgos[jI]).c_str(), 1);
+    csTree_p->SetBranchStatus(("jtm" + jtAlgos[jI]).c_str(), 1);
     csTree_p->SetBranchStatus(("atlasmatchpos" + jtAlgos[jI]).c_str(), 1);
     csTree_p->SetBranchStatus(("truthmatchpos" + jtAlgos[jI]).c_str(), 1);
+    csTree_p->SetBranchStatus(("chgtruthmatchpos" + jtAlgos[jI]).c_str(), 1);
 
     csTree_p->SetBranchAddress(("njt" + jtAlgos[jI]).c_str(), &njt_[jI]);
     csTree_p->SetBranchAddress(("jtpt" + jtAlgos[jI]).c_str(), jtpt_[jI]);
     csTree_p->SetBranchAddress(("jteta" + jtAlgos[jI]).c_str(), jteta_[jI]);
     csTree_p->SetBranchAddress(("jtphi" + jtAlgos[jI]).c_str(), jtphi_[jI]);
+    csTree_p->SetBranchAddress(("jtm" + jtAlgos[jI]).c_str(), jtm_[jI]);
     csTree_p->SetBranchAddress(("atlasmatchpos" + jtAlgos[jI]).c_str(), atlasmatchpos_[jI]);
     csTree_p->SetBranchAddress(("truthmatchpos" + jtAlgos[jI]).c_str(), truthmatchpos_[jI]);
+    csTree_p->SetBranchAddress(("chgtruthmatchpos" + jtAlgos[jI]).c_str(), chgtruthmatchpos_[jI]);
   }
 
   if(doDebug) std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 
   csTree_p->SetBranchStatus("njtTruth", 1);
   csTree_p->SetBranchStatus("jtptTruth", 1);
-  //  csTree_p->SetBranchStatus("jtchgptTruth", 1);
   csTree_p->SetBranchStatus("jtetaTruth", 1);
   csTree_p->SetBranchStatus("jtphiTruth", 1);
-  
+  csTree_p->SetBranchStatus("jtmTruth", 1);
+  for(Int_t aI = 0; aI < nJtAlgo; ++aI){
+    csTree_p->SetBranchStatus(("jtmatchpos" + jtAlgos[aI] + "Truth").c_str(), 1);
+  }
+
+  csTree_p->SetBranchStatus("nchgjtTruth", 1);
+  csTree_p->SetBranchStatus("chgjtptTruth", 1);
+  csTree_p->SetBranchStatus("chgjtetaTruth", 1);
+  csTree_p->SetBranchStatus("chgjtphiTruth", 1);
+  csTree_p->SetBranchStatus("chgjtmTruth", 1);
+  for(Int_t aI = 0; aI < nJtAlgo; ++aI){
+    csTree_p->SetBranchStatus(("chgjtmatchpos" + jtAlgos[aI] + "Truth").c_str(), 1);
+  }
+
+
   csTree_p->SetBranchAddress("njtTruth", &njtTruth_);
   csTree_p->SetBranchAddress("jtptTruth", jtptTruth_);
-  //  csTree_p->SetBranchAddress("jtchgptTruth", jtchgptTruth_);
   csTree_p->SetBranchAddress("jtetaTruth", jtetaTruth_);
   csTree_p->SetBranchAddress("jtphiTruth", jtphiTruth_);
+  csTree_p->SetBranchAddress("jtmTruth", jtmTruth_);
+  for(Int_t aI = 0; aI < nJtAlgo; ++aI){
+    csTree_p->SetBranchAddress(("jtmatchpos" + jtAlgos[aI] + "Truth").c_str(), jtmatchposTruth_[aI]);
+  }
+
+  csTree_p->SetBranchAddress("nchgjtTruth", &nchgjtTruth_);
+  csTree_p->SetBranchAddress("chgjtptTruth", chgjtptTruth_);
+  csTree_p->SetBranchAddress("chgjtetaTruth", chgjtetaTruth_);
+  csTree_p->SetBranchAddress("chgjtphiTruth", chgjtphiTruth_);
+  csTree_p->SetBranchAddress("chgjtmTruth", chgjtmTruth_);
+  for(Int_t aI = 0; aI < nJtAlgo; ++aI){
+    csTree_p->SetBranchAddress(("chgjtmatchpos" + jtAlgos[aI] + "Truth").c_str(), chgjtmatchposTruth_[aI]);
+  }
 
   const Int_t nDiv = TMath::Max(1, nEntries/50);
 
@@ -363,7 +416,15 @@ int makeClusterHist(std::string inConfigFileName)
 	if(jtpt_[aI][jI] >= jtPtHigh) continue;
 	
 	spectra_p[aI][centPos]->Fill(jtpt_[aI][jI], weight);
-      
+
+	if(isMC){
+	  if(jtAlgos[aI].find("Trk") != std::string::npos){
+	    if(chgtruthmatchpos_[aI][jI] < 0) spectraUnmatched_p[aI][centPos]->Fill(jtpt_[aI][jI], weight);	  
+	  }
+	  else{
+	    if(truthmatchpos_[aI][jI] < 0) spectraUnmatched_p[aI][centPos]->Fill(jtpt_[aI][jI], weight);	  
+	  }
+	}
       }
     }
     
@@ -392,19 +453,66 @@ int makeClusterHist(std::string inConfigFileName)
 
 
 	if(doDebug) std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
-	  	  
+      	
 	for(Int_t aI = 0; aI < nJtAlgo; ++aI){
-	  for(Int_t jI2 = 0; jI2 < njt_[aI]; ++jI2){
-	    if(truthmatchpos_[aI][jI2] == jI){
-	      matchedTruthSpectra_p[aI][centPos]->Fill(jtptTruth_[jI], weight);
-	      recoOverGen_VPt_p[aI][centPos][jtPos]->Fill(jtpt_[aI][jI2]/jtptTruth_[jI], weight);
-	      recoGen_DeltaEta_p[aI][centPos][jtPos]->Fill(jteta_[aI][jI2] - jtetaTruth_[jI], weight);
-	      recoGen_DeltaPhi_p[aI][centPos][jtPos]->Fill(getDPHI(jtphi_[aI][jI2], jtphiTruth_[jI]), weight);
-	      break;
-	    }
+	  if(jtAlgos[aI].find("Trk") != std::string::npos) continue;
+	  int pos = jtmatchposTruth_[aI][jI];
+	  if(pos >= 0){	    
+	    matchedTruthSpectra_p[aI][centPos]->Fill(jtptTruth_[jI], weight);
+	    
+	    recoOverGen_VPt_p[aI][centPos][jtPos]->Fill(jtpt_[aI][pos]/jtptTruth_[jI], weight);
+	    recoOverGenM_VPt_p[aI][centPos][jtPos]->Fill(jtm_[aI][pos]/jtmTruth_[jI], weight);
+	    recoOverGenMOverPt_VPt_p[aI][centPos][jtPos]->Fill(jtm_[aI][pos]*jtptTruth_[jI]/(jtmTruth_[jI]*jtpt_[aI][pos]), weight);
+
+	    recoGen_DeltaEta_p[aI][centPos][jtPos]->Fill(jteta_[aI][pos] - jtetaTruth_[jI], weight);
+	    recoGen_DeltaPhi_p[aI][centPos][jtPos]->Fill(getDPHI(jtphi_[aI][pos], jtphiTruth_[jI]), weight);
+	    
 	  }
-	  if(doDebug) std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 	}
+      }
+    
+      for(Int_t jI = 0; jI < nchgjtTruth_; ++jI){
+	if(TMath::Abs(chgjtetaTruth_[jI]) > maxJtAbsEta) continue;
+	if(chgjtptTruth_[jI] < jtPtLow) continue;
+	if(chgjtptTruth_[jI] >= jtPtHigh) continue;
+	
+	if(doDebug) std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+	Int_t jtPos = -1;
+	for(Int_t jI2 = 0; jI2 < nJtPtBins; ++jI2){
+	  if(chgjtptTruth_[jI] >= jtPtBins[jI2] && chgjtptTruth_[jI] < jtPtBins[jI2+1]){
+	    jtPos = jI2;
+	    break;
+	  }
+	}
+	if(jtPos == -1 && chgjtptTruth_[jI] == jtPtBins[nJtPtBins]) jtPos = nJtPtBins-1;
+
+
+	spectraChg_p[centPos]->Fill(chgjtptTruth_[jI], weight);
+	if(doDebug) std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+	  
+	for(Int_t aI = 0; aI < nJtAlgo; ++aI){
+	  if(doDebug) std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+	  if(jtAlgos[aI].find("Trk") == std::string::npos) continue;
+	  if(doDebug) std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+	  int pos = chgjtmatchposTruth_[aI][jI];
+	  if(pos >= 0){	    
+	    if(doDebug) std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+	    matchedTruthSpectra_p[aI][centPos]->Fill(chgjtptTruth_[jI], weight);
+	    if(doDebug) std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+	    
+	    recoOverGen_VPt_p[aI][centPos][jtPos]->Fill(jtpt_[aI][pos]/chgjtptTruth_[jI], weight);
+	    recoOverGenM_VPt_p[aI][centPos][jtPos]->Fill(jtm_[aI][pos]/chgjtmTruth_[jI], weight);
+	    recoOverGenMOverPt_VPt_p[aI][centPos][jtPos]->Fill(jtm_[aI][pos]*chgjtptTruth_[jI]/(chgjtmTruth_[jI]*jtpt_[aI][pos]), weight);
+
+	    recoGen_DeltaEta_p[aI][centPos][jtPos]->Fill(jteta_[aI][pos] - chgjtetaTruth_[jI], weight);
+	    if(doDebug) std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+	    recoGen_DeltaPhi_p[aI][centPos][jtPos]->Fill(getDPHI(jtphi_[aI][pos], chgjtphiTruth_[jI]), weight);
+	    if(doDebug) std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+	  }
+	}
+      
+	if(doDebug) std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+
       }
     }
   }
@@ -430,6 +538,16 @@ int makeClusterHist(std::string inConfigFileName)
       spectra_p[aI][cI]->Write("", TObject::kOverwrite);
       delete spectra_p[aI][cI];
 
+      
+      if(aI == nJtAlgo){
+	spectraChg_p[cI]->Write("", TObject::kOverwrite);
+	delete spectraChg_p[cI];
+      }
+      else{
+	spectraUnmatched_p[aI][cI]->Write("", TObject::kOverwrite);
+	delete spectraUnmatched_p[aI][cI];
+      }
+
       if(aI == nJtAlgo){
 	spectra_Unweighted_p[cI]->Write("", TObject::kOverwrite);
 	delete spectra_Unweighted_p[cI];
@@ -443,6 +561,12 @@ int makeClusterHist(std::string inConfigFileName)
 	for(Int_t jI = 0; jI < nJtPtBins; ++jI){
 	  recoOverGen_VPt_p[aI][cI][jI]->Write("", TObject::kOverwrite);
 	  delete recoOverGen_VPt_p[aI][cI][jI];
+
+	  recoOverGenM_VPt_p[aI][cI][jI]->Write("", TObject::kOverwrite);
+	  delete recoOverGenM_VPt_p[aI][cI][jI];
+
+	  recoOverGenMOverPt_VPt_p[aI][cI][jI]->Write("", TObject::kOverwrite);
+	  delete recoOverGenMOverPt_VPt_p[aI][cI][jI];
 	  
 	  recoGen_DeltaEta_p[aI][cI][jI]->Write("", TObject::kOverwrite);
 	  delete recoGen_DeltaEta_p[aI][cI][jI];

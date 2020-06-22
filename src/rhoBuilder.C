@@ -70,6 +70,18 @@ bool rhoBuilder::Init(std::vector<double> inEtaBins)
   return m_isInit;
 }
 
+
+bool rhoBuilder::CalcRhoFromPseudoJet(std::vector<fastjet::PseudoJet>* constituents_p)
+{
+  std::vector<double> ptD_, etaD_;
+  for(unsigned int cI = 0; cI < constituents_p->size(); ++cI){
+    ptD_.push_back(constituents_p->at(cI).pt());
+    etaD_.push_back(constituents_p->at(cI).eta());
+  }
+
+  return CalcRhoFromPtEta(&ptD_, &etaD_);
+}
+
 bool rhoBuilder::CalcRhoFromPtEta(std::vector<float>* pt_p, std::vector<float>* eta_p)
 {
   if(m_doGlobalDebug) std::cout << "GLOBAL DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;

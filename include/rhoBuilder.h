@@ -6,6 +6,9 @@
 //cpp
 #include <vector>
 
+//Fastjet
+#include "fastjet/PseudoJet.hh"
+
 //Local
 #include "include/globalDebugHandler.h"
 
@@ -18,6 +21,7 @@ class rhoBuilder{
   rhoBuilder(std::vector<double> inEtaBins);
   bool Init(std::vector<float> inEtaBins);
   bool Init(std::vector<double> inEtaBins);
+  bool CalcRhoFromPseudoJet(std::vector<fastjet::PseudoJet>* constituents_p);
   bool CalcRhoFromPtEta(std::vector<float>* pt_p, std::vector<float>* eta_p);
   bool CalcRhoFromPtEta(std::vector<double>* pt_p, std::vector<double>* eta_p);
   bool SetRho(std::vector<double>* rho_p);

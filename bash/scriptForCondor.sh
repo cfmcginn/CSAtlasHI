@@ -6,7 +6,7 @@ then
     id=$1
 fi
 
-inputFile=input/rucioJZAllFiles_TEST_20200604.txt
+inputFile=input/rucioJZAllFiles_20200604.txt
 
 #source /usatlas/u/cfmcginn/.setEnv.sh
 
@@ -30,6 +30,7 @@ file2=${file#*:}
 if [[ -f $file ]]
 then
     echo "RUNNING OVER LOCALLY AVAILABLE FILE $file"
+    file2=$file
 else
     echo "DOWNLOADING FILE $file"
     rucio download $file --no-subdir
@@ -55,26 +56,10 @@ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$PWD:$PWD/lib
 make clean
 make
 
-jzStr=""
-if [[ $file == *"19989634"* ]]
-then
-    jzStr="JZ1"
-elif [[ $file == *"19947473"* ]]
-then
-    jzStr="JZ2"
-elif [[ $file == *"19989702"* ]]
-then
-    jzStr="JZ3"
-fi
-
-echo "RUN LS A"
-ls
-echo "RUN LS A1"
-ls bin/
 #./bin/clusterToCS.exe $file2 $file2 "trk" $jzStr
-sed -i -e "s@REPINFILENAME@$file2@g" input/defaultConfig.txt
-sed -i -e "s@PROCESS@$1@g" input/defaultConfig.txt
-./bin/makeClusterTree.exe input/defaultConfig.txt
+sed -i -e "s@REPINFILENAME@$file2@g" input/makeClusterTree.config
+sed -i -e "s@PROCESS@$1@g" input/makeClusterTree.config
+./bin/makeClusterTree.exe input/makeClusterTree.config
 echo "RUN LS B"
 ls
 cp output/*/*.root .

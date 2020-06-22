@@ -75,7 +75,7 @@ obj/constituentBuilder.o: src/constituentBuilder.C
 	$(CXX) $(CXXFLAGS) -fPIC -c src/constituentBuilder.C -o obj/constituentBuilder.o $(FASTJET) $(ROOT) $(INCLUDE)
 
 obj/rhoBuilder.o: src/rhoBuilder.C
-	$(CXX) $(CXXFLAGS) -fPIC -c src/rhoBuilder.C -o obj/rhoBuilder.o $(INCLUDE)
+	$(CXX) $(CXXFLAGS) -fPIC -c src/rhoBuilder.C -o obj/rhoBuilder.o $(FASTJET) $(INCLUDE)
 
 obj/sampleHandler.o: src/sampleHandler.C
 	$(CXX) $(CXXFLAGS) -fPIC -c src/sampleHandler.C -o obj/sampleHandler.o $(INCLUDE)

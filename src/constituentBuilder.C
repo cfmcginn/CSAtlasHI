@@ -52,6 +52,25 @@ bool constituentBuilder::InitPtEtaPhi(std::vector<float>* pt_p, std::vector<floa
   return true;
 }
 
+bool constituentBuilder::InitPtEtaPhiID(std::vector<float>* pt_p, std::vector<float>* eta_p, std::vector<float>* phi_p, std::vector<bool>* id_p, double inUserMinPt)
+{
+  m_doGlobalDebug = gBug.GetDoGlobalDebug();
+
+  if(m_doGlobalDebug) std::cout << "GLOBAL DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+
+  std::vector<float> pt2, eta2, phi2;
+  for(unsigned int pI = 0; pI < pt_p->size(); ++pI){
+    if(id_p->at(pI) == false) continue;
+
+    pt2.push_back(pt_p->at(pI));
+    eta2.push_back(eta_p->at(pI));
+    phi2.push_back(phi_p->at(pI));
+  }
+
+  return InitPtEtaPhi(&pt2, &eta2, &phi2, inUserMinPt);
+}
+
+
 std::vector<fastjet::PseudoJet> constituentBuilder::GetCleanInputs(){return cleanInputs;}
 std::vector<fastjet::PseudoJet> constituentBuilder::GetGhostedInputs(){return ghostedInputs;}
 

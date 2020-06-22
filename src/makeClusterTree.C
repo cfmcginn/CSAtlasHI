@@ -10,6 +10,7 @@
 //ROOT
 #include "TEnv.h"
 #include "TFile.h"
+#include "TLorentzVector.h"
 #include "TMath.h"
 #include "TTree.h"
 
@@ -25,11 +26,12 @@
 //Local
 #include "include/checkMakeDir.h"
 #include "include/centralityFromInput.h"
-#include "include/configParser.h"
 #include "include/constituentBuilder.h"
 #include "include/cppWatch.h"
+#include "include/etaPhiFunc.h"
 #include "include/ghostUtil.h"
 #include "include/globalDebugHandler.h"
+#include "include/pdgToChargeMassClass.h"
 #include "include/plotUtilities.h"
 #include "include/returnRootFileContentsList.h"
 #include "include/rhoBuilder.h"
@@ -49,11 +51,55 @@ bool setJet(fastjet::PseudoJet jet, Float_t* jtpt_, Float_t* jteta_, Float_t* jt
   return true;
 }
 
+double calcMass(fastjet::PseudoJet jet)
+{
+  std::vector<fastjet::PseudoJet> constituents = jet.constituents();
+  double E = 0.0;
+  double px = 0.0;
+  double py = 0.0;
+  double pz = 0.0;
+
+  for(auto const & constituent : constituents){
+    E += constituent.e();
+    px += constituent.px();
+    py += constituent.py();
+    pz += constituent.pz();
+  }
+
+  double p2 = px*px + py*py + pz*pz;
+  double E2 = E*E;
+  if(E2 > p2) return TMath::Sqrt(E2 - p2);
+  else return TMath::Sqrt(p2 - E2);
+}
+
+bool setJet(fastjet::PseudoJet jet, Float_t* jtpt_, Float_t* jteta_, Float_t* jtphi_, Float_t* jtm_, Float_t ptMin, Float_t absEtaMax)
+{
+  if(jet.pt() < ptMin) return false;
+  if(TMath::Abs(jet.eta()) >= absEtaMax) return false;
+
+  (*jtpt_) = jet.pt();
+  (*jteta_) = jet.eta();
+  (*jtphi_) = jet.phi_std();
+  (*jtm_) = calcMass(jet);
+  
+  return true;
+}
+
 void fillArrays(std::vector<fastjet::PseudoJet>* jets, Int_t* njt_, Float_t jtpt_[], Float_t jteta_[], Float_t jtphi_[], Float_t ptMin, Float_t absEtaMax)
 {
   (*njt_) = 0;
   for(auto const & jet : (*jets)){
     if(setJet(jet, &(jtpt_[(*njt_)]), &(jteta_[(*njt_)]), &(jtphi_[(*njt_)]), ptMin, absEtaMax)) ++(*njt_);
+  }
+  
+  return;
+}
+
+void fillArrays(std::vector<fastjet::PseudoJet>* jets, Int_t* njt_, Float_t jtpt_[], Float_t jteta_[], Float_t jtphi_[], Float_t jtm_[], Float_t ptMin, Float_t absEtaMax)
+{
+  (*njt_) = 0;
+  for(auto const & jet : (*jets)){
+    if(setJet(jet, &(jtpt_[(*njt_)]), &(jteta_[(*njt_)]), &(jtphi_[(*njt_)]), &(jtm_[(*njt_)]), ptMin, absEtaMax)) ++(*njt_);
   }
   
   return;
@@ -85,6 +131,11 @@ void rescaleGhosts(std::vector<float> rho_, std::vector<float> etaBins_, std::ve
     int ghostPos = ghostEtaPos(etaBins_, ighost);
 
     double E = (rho_.at(ghostPos))*ighost.area();
+    if(E < ighost.e() && ighost.e() < TMath::Power(10, -50)){
+      //      std::cout << "Skipping ghost w/ eta \'" << ighost.eta() << "\' in bin \'" << etaBins_[ghostPos] << "-" << etaBins_[ghostPos+1] << "\', rho=\'"  << rho_[ghostPos] << "\', ghostE=" << ighost.e() << ",recalcE=" << E << "." << std::endl;
+      continue; // Skip it if its gonna give a nonsense value
+    }
+
     Double_t Et = E/std::cosh(ighost.eta());
     Double_t Px = Et*std::cos(ighost.phi_std());
     Double_t Py = Et*std::sin(ighost.phi_std());
@@ -102,6 +153,8 @@ int makeClusterTree(std::string inConfigFileName)
   globalDebugHandler gBug;
   const bool doGlobalDebug = gBug.GetDoGlobalDebug();
 
+  pdgToChargeMass pdgToM;
+
   //Timing Tools
   cppWatch total, preLoop, mainLoop, postLoop;
   std::vector<cppWatch> subMainLoop;
@@ -111,10 +164,11 @@ int makeClusterTree(std::string inConfigFileName)
   preLoop.start();
 
   checkMakeDir check;
-  if(!check.checkFileExt(inConfigFileName, "txt")) return 1; // Check input is valid Config file
-  configParser config(inConfigFileName);//Process input conf(ig
-  std::string inROOTFileName = config.GetConfigVal("INFILENAME");
-  std::string inCentFileName = config.GetConfigVal("CENTFILENAME");
+  if(!check.checkFileExt(inConfigFileName, "config")) return 1; // Check input is valid Config file
+
+  TEnv* inConfig_p = new TEnv(inConfigFileName.c_str());
+  std::string inROOTFileName = inConfig_p->GetValue("INFILENAME", "");
+  std::string inCentFileName = inConfig_p->GetValue("CENTFILENAME", "");
   
   if(!check.checkFileExt(inROOTFileName, "root")) return 1; // Check input is valid ROOT file
   if(!check.checkFileExt(inCentFileName, "txt")) return 1; // Check centrality table is valid TXT file
@@ -126,9 +180,9 @@ int makeClusterTree(std::string inConfigFileName)
   centralityFromInput centTable(inCentFileName);
 
   //Process our config file
-  const bool isMC = std::stoi(config.GetConfigVal("ISMC"));
-  const bool doTracks = std::stoi(config.GetConfigVal("DOTRACKS"));
-  const bool doTowers = std::stoi(config.GetConfigVal("DOTOWERS"));  
+  const bool isMC = inConfig_p->GetValue("ISMC", 0);
+  const bool doTracks = inConfig_p->GetValue("DOTRACKS", 0);
+  const bool doTowers = inConfig_p->GetValue("DOTOWERS", 0);  
 
   const std::string trkStr = "Trk";
   const std::string towerStr = "Tower";
@@ -138,11 +192,11 @@ int makeClusterTree(std::string inConfigFileName)
     return 1;
   }
   
-  const double ghost_area = std::stod(config.GetConfigVal("GHOSTAREA"));
+  const double ghost_area = inConfig_p->GetValue("GHOSTAREA", 0.01);
   
-  const double recoJtMinPt = std::stod(config.GetConfigVal("RECOJTMINPT"));
-  const double genJtMinPt = std::stod(config.GetConfigVal("GENJTMINPT"));
-  const double jtMaxAbsEta = std::stod(config.GetConfigVal("JTMAXABSETA"));  
+  const double recoJtMinPt = inConfig_p->GetValue("RECOJTMINPT", 10.);
+  const double genJtMinPt = inConfig_p->GetValue("GENJTMINPT", 10.);
+  const double jtMaxAbsEta = inConfig_p->GetValue("JTMAXABSETA", 2.5);  
   
   TFile* inFile_p = new TFile(inROOTFileName.c_str(), "READ"); 
   TEnv* inFileConfig_p = (TEnv*)inFile_p->Get("config");
@@ -177,6 +231,7 @@ int makeClusterTree(std::string inConfigFileName)
     branchList.push_back("trk_pt");
     branchList.push_back("trk_eta");
     branchList.push_back("trk_phi");
+    branchList.push_back("trk_tight_primary");
   }
   if(doTowers){//Append tower variables according to config
     branchList.push_back("tower_pt");
@@ -187,6 +242,12 @@ int makeClusterTree(std::string inConfigFileName)
     branchList.push_back("akt4_truth_jet_pt");
     branchList.push_back("akt4_truth_jet_eta");
     branchList.push_back("akt4_truth_jet_phi");
+
+    branchList.push_back("truth_pt");
+    branchList.push_back("truth_eta");
+    branchList.push_back("truth_phi");
+    branchList.push_back("truth_charge");
+    branchList.push_back("truth_pdg");
   }
   
   if(!ttreeContainsBranches(inTree_p, &branchList)) return 1; //Test ttree contains all valid branches
@@ -201,6 +262,7 @@ int makeClusterTree(std::string inConfigFileName)
   std::vector<float>* trk_pt_p=nullptr;
   std::vector<float>* trk_eta_p=nullptr;
   std::vector<float>* trk_phi_p=nullptr;
+  std::vector<bool>* trk_tight_primary_p=nullptr;
 
   std::vector<float>* tower_pt_p=nullptr;
   std::vector<float>* tower_eta_p=nullptr;
@@ -214,6 +276,12 @@ int makeClusterTree(std::string inConfigFileName)
   std::vector<float>* akt4_truth_jet_eta_p=nullptr;
   std::vector<float>* akt4_truth_jet_phi_p=nullptr;
 
+  std::vector<float>* truth_pt_p=nullptr;
+  std::vector<float>* truth_eta_p=nullptr;
+  std::vector<float>* truth_phi_p=nullptr;
+  std::vector<float>* truth_charge_p=nullptr;
+  std::vector<int>* truth_pdg_p=nullptr;
+
   inTree_p->SetBranchAddress("runNumber", &runNumber);
   inTree_p->SetBranchAddress("eventNumber", &eventNumber);
   inTree_p->SetBranchAddress("lumiBlock", &lumiBlock);
@@ -224,6 +292,7 @@ int makeClusterTree(std::string inConfigFileName)
     inTree_p->SetBranchAddress("trk_pt", &trk_pt_p);
     inTree_p->SetBranchAddress("trk_eta", &trk_eta_p);
     inTree_p->SetBranchAddress("trk_phi", &trk_phi_p);
+    inTree_p->SetBranchAddress("trk_tight_primary", &trk_tight_primary_p);
   }
   if(doTowers){
     inTree_p->SetBranchAddress("tower_pt", &tower_pt_p);
@@ -239,9 +308,15 @@ int makeClusterTree(std::string inConfigFileName)
     inTree_p->SetBranchAddress("akt4_truth_jet_pt", &akt4_truth_jet_pt_p);
     inTree_p->SetBranchAddress("akt4_truth_jet_eta", &akt4_truth_jet_eta_p);
     inTree_p->SetBranchAddress("akt4_truth_jet_phi", &akt4_truth_jet_phi_p);
+
+    inTree_p->SetBranchAddress("truth_pt", &truth_pt_p);
+    inTree_p->SetBranchAddress("truth_eta", &truth_eta_p);
+    inTree_p->SetBranchAddress("truth_phi", &truth_phi_p);
+    inTree_p->SetBranchAddress("truth_charge", &truth_charge_p);
+    inTree_p->SetBranchAddress("truth_pdg", &truth_pdg_p);
   }
 
-  std::string outFileName = "output/" + dateStr + "/" + rootFileNameProc(config.GetConfigVal("OUTFILENAME"), {"ISMC" + std::to_string(isMC), dateStr}); 
+  std::string outFileName = "output/" + dateStr + "/" + rootFileNameProc(inConfig_p->GetValue("OUTFILENAME", "outFile"), {"ISMC" + std::to_string(isMC), dateStr}); 
   
   TFile* outFile_p = new TFile(outFileName.c_str(), "RECREATE");
   TTree* outTree_p = new TTree("clusterJetsCS", "");
@@ -338,14 +413,16 @@ int makeClusterTree(std::string inConfigFileName)
   constituentBuilder cBuilder; // We will need this - declare here to avoid constant resizing for memory
   rhoBuilder rBuilder(*etaBinsOut_p);
   rBuilder.Print();
-  std::vector<fastjet::PseudoJet> tempInputs, tempJets, globalGhosts, globalGhostsIter, subtracted_particles, realJetConst, realJetConstClean, realJetConstDirty, ghostJetConst; // Again, don't want to waste time on resizes so declare all these semi-global
+  std::vector<fastjet::PseudoJet> tempInputs, tempJets, globalGhosts, globalGhostsIter, subtracted_particles, subtracted_particles_iter, realJetConst, realJetConstClean, realJetConstDirty, ghostJetConst; // Again, don't want to waste time on resizes so declare all these semi-global
   
   Int_t njt_[nMaxJtAlgo];
   Float_t jtpt_[nMaxJtAlgo][nMaxJets];
   Float_t jteta_[nMaxJtAlgo][nMaxJets];
   Float_t jtphi_[nMaxJtAlgo][nMaxJets];
+  Float_t jtm_[nMaxJtAlgo][nMaxJets];
   Int_t atlasmatchpos_[nMaxJtAlgo][nMaxJets];
   Int_t truthmatchpos_[nMaxJtAlgo][nMaxJets];
+  Int_t chgtruthmatchpos_[nMaxJtAlgo][nMaxJets];
   
   Int_t njtATLAS_;
   Float_t jtptATLAS_[nMaxJets];
@@ -356,6 +433,17 @@ int makeClusterTree(std::string inConfigFileName)
   Float_t jtptTruth_[nMaxJets];
   Float_t jtetaTruth_[nMaxJets];
   Float_t jtphiTruth_[nMaxJets];
+  Float_t jtmTruth_[nMaxJets];
+  Int_t jtmatchChgJtTruth_[nMaxJets];
+  Int_t jtmatchposTruth_[nMaxJtAlgo][nMaxJets];
+
+  Int_t nchgjtTruth_;
+  Float_t chgjtptTruth_[nMaxJets];
+  Float_t chgjtetaTruth_[nMaxJets];
+  Float_t chgjtphiTruth_[nMaxJets];
+  Float_t chgjtmTruth_[nMaxJets];
+  Int_t chgjtmatchJtTruth_[nMaxJets];
+  Int_t chgjtmatchposTruth_[nMaxJtAlgo][nMaxJets];
 
   outTree_p->Branch("sampleTag", &sampleTag_, "sampleTag/l");
   outTree_p->Branch("xSectionNB", &xSectionNB_, "xSectionNB/F");
@@ -386,9 +474,13 @@ int makeClusterTree(std::string inConfigFileName)
     outTree_p->Branch(("jtpt" + jtAlgos[jI]).c_str(), jtpt_[jI], ("jtpt" + jtAlgos[jI] + "[njt" + jtAlgos[jI] + "]/F").c_str());
     outTree_p->Branch(("jteta" + jtAlgos[jI]).c_str(), jteta_[jI], ("jteta" + jtAlgos[jI] + "[njt" + jtAlgos[jI] + "]/F").c_str());
     outTree_p->Branch(("jtphi" + jtAlgos[jI]).c_str(), jtphi_[jI], ("jtphi" + jtAlgos[jI] + "[njt" + jtAlgos[jI] + "]/F").c_str());
+    outTree_p->Branch(("jtm" + jtAlgos[jI]).c_str(), jtm_[jI], ("jtm" + jtAlgos[jI] + "[njt" + jtAlgos[jI] + "]/F").c_str());
     outTree_p->Branch(("atlasmatchpos" + jtAlgos[jI]).c_str(), atlasmatchpos_[jI], ("atlasmatchpos" + jtAlgos[jI] + "[njt" + jtAlgos[jI] + "]/I").c_str());
 
-    if(isMC) outTree_p->Branch(("truthmatchpos" + jtAlgos[jI]).c_str(), truthmatchpos_[jI], ("truthmatchpos" + jtAlgos[jI] + "[njt" + jtAlgos[jI] + "]/I").c_str());
+    if(isMC){
+      outTree_p->Branch(("truthmatchpos" + jtAlgos[jI]).c_str(), truthmatchpos_[jI], ("truthmatchpos" + jtAlgos[jI] + "[njt" + jtAlgos[jI] + "]/I").c_str());
+      outTree_p->Branch(("chgtruthmatchpos" + jtAlgos[jI]).c_str(), chgtruthmatchpos_[jI], ("chgtruthmatchpos" + jtAlgos[jI] + "[njt" + jtAlgos[jI] + "]/I").c_str());
+    }
   }
   
   outTree_p->Branch("njtATLAS", &njtATLAS_, "njtATLAS/I");
@@ -401,9 +493,26 @@ int makeClusterTree(std::string inConfigFileName)
     outTree_p->Branch("jtptTruth", jtptTruth_, "jtptTruth[njtTruth]/F");
     outTree_p->Branch("jtetaTruth", jtetaTruth_, "jtetaTruth[njtTruth]/F");
     outTree_p->Branch("jtphiTruth", jtphiTruth_, "jtphiTruth[njtTruth]/F");
+    outTree_p->Branch("jtmTruth", jtmTruth_, "jtmTruth[njtTruth]/F");
+    outTree_p->Branch("jtmatchChgJtTruth", jtmatchChgJtTruth_, "jtmatchChgJtTruth[njtTruth]/I");
+
+    for(Int_t aI = 0; aI < nJtAlgo; ++aI){
+      outTree_p->Branch(("jtmatchpos" + jtAlgos[aI] + "Truth").c_str(), jtmatchposTruth_[aI], ("jtmatchpos" + jtAlgos[aI] + "Truth[njtTruth]/I").c_str());      
+    }
+
+    outTree_p->Branch("nchgjtTruth", &nchgjtTruth_, "nchgjtTruth/I");
+    outTree_p->Branch("chgjtptTruth", chgjtptTruth_, "chgjtptTruth[nchgjtTruth]/F");
+    outTree_p->Branch("chgjtetaTruth", chgjtetaTruth_, "chgjtetaTruth[nchgjtTruth]/F");
+    outTree_p->Branch("chgjtphiTruth", chgjtphiTruth_, "chgjtphiTruth[nchgjtTruth]/F");
+    outTree_p->Branch("chgjtmTruth", chgjtmTruth_, "chgjtmTruth[nchgjtTruth]/F");
+    outTree_p->Branch("chgjtmatchJtTruth", chgjtmatchJtTruth_, "chgjtmatchJtTruth[nchgjtTruth]/I");
+
+    for(Int_t aI = 0; aI < nJtAlgo; ++aI){
+      outTree_p->Branch(("chgjtmatchpos" + jtAlgos[aI] + "Truth").c_str(), chgjtmatchposTruth_[aI], ("chgjtmatchpos" + jtAlgos[aI] + "Truth[nchgjtTruth]/I").c_str());      
+    }
   }
   
-  const ULong64_t nEntries = TMath::Min((ULong64_t)1, (ULong64_t)inTree_p->GetEntries());
+  const ULong64_t nEntries = TMath::Min((ULong64_t)5000, (ULong64_t)inTree_p->GetEntries());
   const ULong64_t nDiv = TMath::Max((ULong64_t)1, nEntries/20);
 
   std::cout << "Processing " << nEntries << " TTree entries..." << std::endl;
@@ -420,16 +529,64 @@ int makeClusterTree(std::string inConfigFileName)
 
     if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
     cent_ = centTable.GetCent(fcalA_et + fcalC_et);
-
+  
     //Pass thru for standard ATLAS reco.
-
     if(doSubMain) subMainLoop.push_back(cppWatch());
     subMainLoop[subMainLoopPos].stop();
     ++subMainLoopPos;
     subMainLoop[subMainLoopPos].start();
-
+  
     fillArrays(akt4hi_em_xcalib_jet_pt_p, akt4hi_em_xcalib_jet_eta_p, akt4hi_em_xcalib_jet_phi_p, &njtATLAS_, jtptATLAS_, jtetaATLAS_, jtphiATLAS_, recoJtMinPt, jtMaxAbsEta);
-    fillArrays(akt4_truth_jet_pt_p, akt4_truth_jet_eta_p, akt4_truth_jet_phi_p, &njtTruth_, jtptTruth_, jtetaTruth_, jtphiTruth_, genJtMinPt, jtMaxAbsEta);
+    if(isMC){
+      fillArrays(akt4_truth_jet_pt_p, akt4_truth_jet_eta_p, akt4_truth_jet_phi_p, &njtTruth_, jtptTruth_, jtetaTruth_, jtphiTruth_, genJtMinPt, jtMaxAbsEta);
+
+      for(Int_t jI = 0; jI < njtTruth_; ++jI){
+	for(Int_t aI = 0; aI < nJtAlgo; ++aI){
+	  jtmatchposTruth_[aI][jI] = -1;
+	}
+      }
+
+      std::vector<fastjet::PseudoJet> particles, particlesChg;
+      TLorentzVector tL;
+      for(unsigned int tI = 0; tI < truth_pt_p->size(); ++tI){
+	if(TMath::Abs(truth_pdg_p->at(tI)) == 13) continue; //ATLAS doesn't include muons in jet reco.
+	tL.SetPtEtaPhiM(truth_pt_p->at(tI), truth_eta_p->at(tI), truth_phi_p->at(tI), pdgToM.GetMassFromPDG(truth_pdg_p->at(tI)));
+	particles.push_back(fastjet::PseudoJet(tL.Px(), tL.Py(), tL.Pz(), tL.E()));
+
+	if(TMath::Abs(truth_charge_p->at(tI)) < 0.1) continue;
+	particlesChg.push_back(fastjet::PseudoJet(tL.Px(), tL.Py(), tL.Pz(), tL.E()));
+      }
+   
+      fastjet::ClusterSequence cs(particles, jet_def);
+      tempJets = fastjet::sorted_by_pt(cs.inclusive_jets(genJtMinPt));
+      std::vector<bool> jetUsed;
+      for(unsigned int tI = 0; tI < tempJets.size(); ++tI){
+	jetUsed.push_back(false);
+      }
+
+      for(Int_t jI = 0; jI < njtTruth_; ++jI){
+	for(unsigned int jI2 = 0; jI2 < tempJets.size(); ++jI2){
+	  if(jetUsed[jI2]) continue;
+
+	  if(getDR(jtetaTruth_[jI], jtphiTruth_[jI], tempJets[jI2].eta(), tempJets[jI2].phi_std()) < 0.3){
+	    jetUsed[jI2] = true;
+	    jtmTruth_[jI] = calcMass(tempJets[jI2]);
+	    break;
+	  }
+	}
+      }
+
+      fastjet::ClusterSequence csChg(particlesChg, jet_def);
+      tempJets = fastjet::sorted_by_pt(csChg.inclusive_jets(genJtMinPt));
+      
+      fillArrays(&tempJets, &nchgjtTruth_, chgjtptTruth_, chgjtetaTruth_, chgjtphiTruth_, chgjtmTruth_, genJtMinPt, jtMaxAbsEta);   
+
+      for(Int_t jI = 0; jI < nchgjtTruth_; ++jI){
+	for(Int_t aI = 0; aI < nJtAlgo; ++aI){
+	  chgjtmatchposTruth_[aI][jI] = -1;
+	}
+      }
+    }
 
     if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 
@@ -439,10 +596,7 @@ int makeClusterTree(std::string inConfigFileName)
     subMainLoop[subMainLoopPos].stop();
     ++subMainLoopPos;
     subMainLoop[subMainLoopPos].start();
-
-    if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
-
-
+    
     //Reset all our arrays
     for(Int_t aI = 0; aI < nJtAlgo; ++aI){njt_[aI] = 0;}
 
@@ -451,11 +605,8 @@ int makeClusterTree(std::string inConfigFileName)
 
     if(doTracks){
       cBuilder.Clean();
-      cBuilder.InitPtEtaPhi(trk_pt_p, trk_eta_p, trk_phi_p);
+      cBuilder.InitPtEtaPhiID(trk_pt_p, trk_eta_p, trk_phi_p, trk_tight_primary_p);
       tempInputs = cBuilder.GetAllInputs(); //No ghosted negative inputs needed for tracks, only happens w/ towers
-
-      if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
-
 
       //Do no-sub - this is slow because we run ClusterSequenceArea
       fastjet::ClusterSequenceArea csA(tempInputs, jet_def, area_def);
@@ -467,7 +618,7 @@ int makeClusterTree(std::string inConfigFileName)
       if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 
 
-      fillArrays(&tempJets, &njt_[algoPos], jtpt_[algoPos], jteta_[algoPos], jtphi_[algoPos], recoJtMinPt, jtMaxAbsEta);
+      fillArrays(&tempJets, &njt_[algoPos], jtpt_[algoPos], jteta_[algoPos], jtphi_[algoPos], jtm_[algoPos], recoJtMinPt, jtMaxAbsEta);
       
       if(doSubMain) subMainLoop.push_back(cppWatch());
       subMainLoop[subMainLoopPos].stop();
@@ -476,6 +627,7 @@ int makeClusterTree(std::string inConfigFileName)
 
       //Build our globalghost collection and run jet-by-jet constituent subtraction
       globalGhosts.clear();
+      globalGhostsIter.clear();
 
       if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
     
@@ -494,13 +646,11 @@ int makeClusterTree(std::string inConfigFileName)
 	ghostJetConst.clear();
 	fastjet::SelectorIsPureGhost().sift(jet.constituents(), ghostJetConst, realJetConst);
 
-
 	for(unsigned int rI = 0; rI < realJetConst.size(); ++rI){
 	  if(cBuilder.IsUserIndexGhosted(realJetConst[rI].user_index())) realJetConstDirty.push_back(realJetConst[rI]);
 	  else realJetConstClean.push_back(realJetConst[rI]);
 	}
 
-	std::cout << "LINE: " << __LINE__ << std::endl;
 	rescaleGhosts(*trkRhoOut_p, *etaBinsOut_p, &ghostJetConst, 2.5);
 
 	globalGhosts.insert(std::end(globalGhosts), std::begin(ghostJetConst), std::end(ghostJetConst));
@@ -519,34 +669,31 @@ int makeClusterTree(std::string inConfigFileName)
 	  subtractor.set_remove_all_zero_pt_particles(true);
 	  subtractor.set_max_eta(maxGlobalAbsEta);
 	  subtracted_particles = subtractor.do_subtraction(realJetConstClean, ghostJetConst);
-
+	
 	  fastjet::PseudoJet subtracted_jet = join(subtracted_particles);
-	  if(setJet(subtracted_jet, &(jtpt_[algoPos][njt_[algoPos]]), &(jteta_[algoPos][njt_[algoPos]]), &(jtphi_[algoPos][njt_[algoPos]]), recoJtMinPt, jtMaxAbsEta)) ++(njt_[algoPos]);
+	  if(setJet(subtracted_jet, &(jtpt_[algoPos][njt_[algoPos]]), &(jteta_[algoPos][njt_[algoPos]]), &(jtphi_[algoPos][njt_[algoPos]]), &(jtm_[algoPos][njt_[algoPos]]), recoJtMinPt, jtMaxAbsEta)) ++(njt_[algoPos]);
 	}
       }
-
+      
       if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
-
 
       if(doSubMain) subMainLoop.push_back(cppWatch());
       subMainLoop[subMainLoopPos].stop();
       ++subMainLoopPos;
       subMainLoop[subMainLoopPos].start();
 
-      std::cout << "LINE: " << __LINE__ << std::endl;
       cBuilder.Clean();
-      cBuilder.InitPtEtaPhi(trk_pt_p, trk_eta_p, trk_phi_p, 4.0);
+      cBuilder.InitPtEtaPhiID(trk_pt_p, trk_eta_p, trk_phi_p, trk_tight_primary_p, 4.0);
       tempInputs = cBuilder.GetCleanInputs();
       fastjet::ClusterSequence cs4(tempInputs, jet_def);
       tempJets = fastjet::sorted_by_pt(cs4.inclusive_jets(recoJtMinPt));
       algo = trkStr + "4GeVCut";
       if(!vectContainsStr(algo, &jtAlgos)) return 1;
       algoPos = algoToPosMap[algo];
-      
-      std::cout << "LINE: " << __LINE__ << std::endl;
-      fillArrays(&tempJets, &njt_[algoPos], jtpt_[algoPos], jteta_[algoPos], jtphi_[algoPos], recoJtMinPt, jtMaxAbsEta);      
+      fillArrays(&tempJets, &njt_[algoPos], jtpt_[algoPos], jteta_[algoPos], jtphi_[algoPos], jtm_[algoPos], recoJtMinPt, jtMaxAbsEta);      
     
-      cBuilder.InitPtEtaPhi(trk_pt_p, trk_eta_p, trk_phi_p);
+      cBuilder.Clean();
+      cBuilder.InitPtEtaPhiID(trk_pt_p, trk_eta_p, trk_phi_p, trk_tight_primary_p);
       tempInputs = cBuilder.GetAllInputs(); 
       for(unsigned int aI = 0; aI < alphaParams.size(); ++aI){
 	fastjet::contrib::ConstituentSubtractor subtractor;
@@ -564,35 +711,27 @@ int makeClusterTree(std::string inConfigFileName)
 	if(!vectContainsStr(algo, &jtAlgos)) return 1;
 	algoPos = algoToPosMap[algo];
       
-	fillArrays(&tempJets, &njt_[algoPos], jtpt_[algoPos], jteta_[algoPos], jtphi_[algoPos], recoJtMinPt, jtMaxAbsEta);      	
+	fillArrays(&tempJets, &njt_[algoPos], jtpt_[algoPos], jteta_[algoPos], jtphi_[algoPos], jtm_[algoPos], recoJtMinPt, jtMaxAbsEta);      	
 
 	for(unsigned int eI = 0; eI < trkRhoIterOut_p->size(); ++eI){
 	  trkRhoIterOut_p->at(eI) = 0.0;
 	}
 
-	for(fastjet::PseudoJet& ighost : globalGhostsIter){
-	  //	  if(isinf(ighost.eta())) continue;
-	  //	  if(TMath::Abs(ighost.eta()) > 10.) continue;
-	  int ghostPos = ghostEtaPos(*etaBinsOut_p, ighost);
-	  trkRhoIterOut_p->at(ghostPos) += ighost.E();
-	}
-
-	for(unsigned int rI = 0; rI < trkRhoIterOut_p->size(); ++rI){
-	  trkRhoIterOut_p->at(rI) /= 2.*TMath::Pi()*((etaBinsOut_p->at(rI+1) - etaBinsOut_p->at(rI)));
-	}
+	if(!rBuilder.CalcRhoFromPseudoJet(&globalGhostsIter)) return 1;
+	if(!rBuilder.SetRho(trkRhoIterOut_p)) return 1;
 	
 	rescaleGhosts(*trkRhoIterOut_p, *etaBinsOut_p, &globalGhosts, 2.5);
-	subtracted_particles = subtractor.do_subtraction(subtracted_particles, globalGhosts);
-	fastjet::ClusterSequence csIter(subtracted_particles, jet_def);
+
+	subtracted_particles_iter = subtractor.do_subtraction(subtracted_particles, globalGhosts);       	
+
+	fastjet::ClusterSequence csIter(subtracted_particles_iter, jet_def);
 	tempJets = fastjet::sorted_by_pt(csIter.inclusive_jets(recoJtMinPt));
 	algo = trkStr + "CSGlobalIterAlpha" + std::to_string(alphaParams[aI]);
 	if(!vectContainsStr(algo, &jtAlgos)) return 1;
 	algoPos = algoToPosMap[algo];
 
-	fillArrays(&tempJets, &njt_[algoPos], jtpt_[algoPos], jteta_[algoPos], jtphi_[algoPos], recoJtMinPt, jtMaxAbsEta);      		
+	fillArrays(&tempJets, &njt_[algoPos], jtpt_[algoPos], jteta_[algoPos], jtphi_[algoPos], jtm_[algoPos], recoJtMinPt, jtMaxAbsEta);      		
       }      
-
-      std::cout << "LINE: " << __LINE__ << std::endl;
     }
 
     if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
@@ -615,7 +754,7 @@ int makeClusterTree(std::string inConfigFileName)
       if(!vectContainsStr(algo, &jtAlgos)) return 1;
       unsigned int algoPos = algoToPosMap[algo];
 
-      fillArrays(&tempJets, &njt_[algoPos], jtpt_[algoPos], jteta_[algoPos], jtphi_[algoPos], recoJtMinPt, jtMaxAbsEta);
+      fillArrays(&tempJets, &njt_[algoPos], jtpt_[algoPos], jteta_[algoPos], jtphi_[algoPos], jtm_[algoPos], recoJtMinPt, jtMaxAbsEta);
       
       if(doSubMain) subMainLoop.push_back(cppWatch());
       subMainLoop[subMainLoopPos].stop();
@@ -624,6 +763,7 @@ int makeClusterTree(std::string inConfigFileName)
 
       //Build our globalghost collection and run jet-by-jet constituent subtraction
       globalGhosts.clear();
+      globalGhostsIter.clear();
 
       if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
     
@@ -665,7 +805,7 @@ int makeClusterTree(std::string inConfigFileName)
 	  subtracted_particles = subtractor.do_subtraction(realJetConstClean, ghostJetConst);
 
 	  fastjet::PseudoJet subtracted_jet = join(subtracted_particles);
-	  if(setJet(subtracted_jet, &(jtpt_[algoPos][njt_[algoPos]]), &(jteta_[algoPos][njt_[algoPos]]), &(jtphi_[algoPos][njt_[algoPos]]), recoJtMinPt, jtMaxAbsEta)) ++(njt_[algoPos]);
+	  if(setJet(subtracted_jet, &(jtpt_[algoPos][njt_[algoPos]]), &(jteta_[algoPos][njt_[algoPos]]), &(jtphi_[algoPos][njt_[algoPos]]), &(jtm_[algoPos][njt_[algoPos]]), recoJtMinPt, jtMaxAbsEta)) ++(njt_[algoPos]);
 	}
       }
 
@@ -686,23 +826,14 @@ int makeClusterTree(std::string inConfigFileName)
 	if(!vectContainsStr(algo, &jtAlgos)) return 1;
 	algoPos = algoToPosMap[algo];
       
-	fillArrays(&tempJets, &njt_[algoPos], jtpt_[algoPos], jteta_[algoPos], jtphi_[algoPos], recoJtMinPt, jtMaxAbsEta);      	
+	fillArrays(&tempJets, &njt_[algoPos], jtpt_[algoPos], jteta_[algoPos], jtphi_[algoPos], jtm_[algoPos], recoJtMinPt, jtMaxAbsEta);      	
 
 	for(unsigned int eI = 0; eI < towerRhoIterOut_p->size(); ++eI){
 	  towerRhoIterOut_p->at(eI) = 0.0;
 	}
+        if(!rBuilder.CalcRhoFromPseudoJet(&globalGhostsIter)) return 1;
+        if(!rBuilder.SetRho(towerRhoIterOut_p)) return 1;
 
-	for(fastjet::PseudoJet& ighost : globalGhostsIter){
-	  //	  if(isinf(ighost.eta())) continue;
-	  //	  if(TMath::Abs(ighost.eta()) > 10.) continue;
-	  int ghostPos = ghostEtaPos(*etaBinsOut_p, ighost);
-	  towerRhoIterOut_p->at(ghostPos) += ighost.E();
-	}
-
-	for(unsigned int rI = 0; rI < towerRhoIterOut_p->size(); ++rI){
-	  towerRhoIterOut_p->at(rI) /= 2.*TMath::Pi()*((etaBinsOut_p->at(rI+1) - etaBinsOut_p->at(rI)));
-	}
-	
 	rescaleGhosts(*towerRhoIterOut_p, *etaBinsOut_p, &globalGhosts, 5.0);
 	subtracted_particles = subtractor.do_subtraction(subtracted_particles, globalGhosts);
 	fastjet::ClusterSequence csIter(subtracted_particles, jet_def);
@@ -711,12 +842,64 @@ int makeClusterTree(std::string inConfigFileName)
 	if(!vectContainsStr(algo, &jtAlgos)) return 1;
 	algoPos = algoToPosMap[algo];
 
-	fillArrays(&tempJets, &njt_[algoPos], jtpt_[algoPos], jteta_[algoPos], jtphi_[algoPos], recoJtMinPt, jtMaxAbsEta);      		
+	fillArrays(&tempJets, &njt_[algoPos], jtpt_[algoPos], jteta_[algoPos], jtphi_[algoPos], jtm_[algoPos], recoJtMinPt, jtMaxAbsEta);      		
       }      
-
     }
 
-    if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+    if(isMC){
+      for(Int_t aI = 0; aI < nJtAlgo; ++aI){
+	std::vector<bool> truthJetMatched, chgtruthJetMatched;
+	for(Int_t jI = 0; jI < njtTruth_; ++jI){
+	  truthJetMatched.push_back(false);
+	  jtmatchChgJtTruth_[jI] = -1;	  
+	}
+	for(Int_t jI = 0; jI < nchgjtTruth_; ++jI){
+	  chgtruthJetMatched.push_back(false);
+	  chgjtmatchJtTruth_[jI] = -1;	  
+	}
+
+	for(Int_t jI = 0; jI < njt_[aI]; ++jI){
+	  atlasmatchpos_[aI][jI] = -1;
+	  truthmatchpos_[aI][jI] = -1;
+	  chgtruthmatchpos_[aI][jI] = -1;
+	  
+	  for(Int_t jI2 = 0; jI2 < njtTruth_; ++jI2){
+	    if(truthJetMatched[jI2]) continue;
+
+	    if(getDR(jteta_[aI][jI], jtphi_[aI][jI], jtetaTruth_[jI2], jtphiTruth_[jI2]) < 0.3){
+	      truthmatchpos_[aI][jI] = jI2;
+	      jtmatchposTruth_[aI][jI2] = jI;
+
+	      truthJetMatched[jI2] = true;
+	      break;
+	    }
+	  }
+
+	  for(Int_t jI2 = 0; jI2 < nchgjtTruth_; ++jI2){
+	    if(chgtruthJetMatched[jI2]) continue;
+
+	    if(getDR(jteta_[aI][jI], jtphi_[aI][jI], chgjtetaTruth_[jI2], chgjtphiTruth_[jI2]) < 0.3){
+	      chgtruthmatchpos_[aI][jI] = jI2;
+	      chgjtmatchposTruth_[aI][jI2] = jI;
+	      chgtruthJetMatched[jI2] = true;
+	      break;
+	    }
+	  }
+	}
+      }
+
+      for(Int_t jI = 0; jI < njtTruth_; ++jI){
+	for(Int_t jI2 = 0; jI2 < nchgjtTruth_; ++jI2){
+	  if(chgjtmatchJtTruth_[jI2] >= 0) continue;
+
+	  if(getDR(jtetaTruth_[jI], jtphiTruth_[jI], chgjtetaTruth_[jI2], chgjtphiTruth_[jI2]) < 0.3){
+	    chgjtmatchJtTruth_[jI2] = jI;
+	    jtmatchChgJtTruth_[jI] = jI2;
+	    break;
+	  }
+	}	
+      }
+    }
        
     outTree_p->Fill();
     subMainLoop[subMainLoopPos].stop();
@@ -763,18 +946,16 @@ int makeClusterTree(std::string inConfigFileName)
     jtAlgosStr = jtAlgosStr + jtAlgo + ",";
   }
   
-  std::map<std::string, std::string> configMap = config.GetConfigMap(); //grab the config in map form
-  configMap["NJTALGO"] = std::to_string(nJtAlgo);
-  configMap["JTALGOS"] = jtAlgosStr;
-  configMap["DATE"] = "dateStr";
-  configMap["OUTFILENAMEFINAL"] = outFileName;
-  TEnv configEnv; // We will convert to tenv and store in file  
-  for(auto const & val : configMap){
-    configEnv.SetValue(val.first.c_str(), val.second.c_str()); //Fill out the map
-  }
-  configEnv.Write("config", TObject::kOverwrite);  
+  inConfig_p->SetValue("NJTALGO", nJtAlgo);
+  inConfig_p->SetValue("JTALGOS", jtAlgosStr.c_str());
+  inConfig_p->SetValue("DATE", dateStr.c_str());
+  inConfig_p->SetValue("OUTFILENAMEFINAL", outFileName.c_str());
+  
+  inConfig_p->Write("config", TObject::kOverwrite); 
   outFile_p->Close();
   delete outFile_p;
+
+  delete inConfig_p;
 
   if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 

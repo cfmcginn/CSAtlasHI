@@ -21,6 +21,7 @@ class constituentBuilder
   ~constituentBuilder(){};
   
   bool InitPtEtaPhi(std::vector<float>* pt_p, std::vector<float>* eta_p, std::vector<float>* phi_p, double inUserMinPt = -1);
+  bool InitPtEtaPhiID(std::vector<float>* pt_p, std::vector<float>* eta_p, std::vector<float>* phi_p, std::vector<bool>* tight_p, double inUserMinPt = -1);
   std::vector<fastjet::PseudoJet> GetCleanInputs();
   std::vector<fastjet::PseudoJet> GetGhostedInputs();
   std::vector<fastjet::PseudoJet> GetAllInputs();
