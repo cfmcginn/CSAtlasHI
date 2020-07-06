@@ -184,6 +184,11 @@ int makeClusterTree(std::string inConfigFileName)
   const bool doTracks = inConfig_p->GetValue("DOTRACKS", 0);
   const bool doTowers = inConfig_p->GetValue("DOTOWERS", 0);  
 
+  const bool doIterRho = inConfig_p->GetValue("DOITERRHO", 1);  
+  Int_t nIterRhoTemp = 1;
+  if(doIterRho) ++nIterRhoTemp;
+  const Int_t nIterRho = nIterRhoTemp;  
+
   const std::string trkStr = "Trk";
   const std::string towerStr = "Tower";
   
@@ -327,11 +332,13 @@ int makeClusterTree(std::string inConfigFileName)
   Float_t cent_;
 
   std::vector<float>* etaBinsOut_p=new std::vector<float>;
+
   std::vector<float>* trkRhoOut_p=new std::vector<float>;
   std::vector<float>* trkRhoIterOut_p=new std::vector<float>;
   std::vector<float>* trkRhoCorrOut_p=new std::vector<float>;
   std::vector<float>* trkPtRhoOut_p=new std::vector<float>;
   std::vector<float>* trkPtRhoCorrOut_p=new std::vector<float>;
+
   std::vector<float>* towerRhoOut_p=new std::vector<float>;
   std::vector<float>* towerRhoIterOut_p=new std::vector<float>;
   std::vector<float>* towerRhoCorrOut_p=new std::vector<float>;
@@ -340,7 +347,7 @@ int makeClusterTree(std::string inConfigFileName)
   
   //Following is set of defined params not supplied in config
   const Int_t nMaxJets = 500;
-  const Int_t nMaxJtAlgo = 10; //Number of algos temp hard-coded
+  const Int_t nMaxJtAlgo = 20; //Number of algos temp hard-coded
   const double rParam = 0.4;
   const double maxGlobalAbsEta = 5.0;
   const fastjet::JetDefinition jet_def(fastjet::antikt_algorithm, rParam, fastjet::E_scheme);
@@ -380,15 +387,23 @@ int makeClusterTree(std::string inConfigFileName)
 
   for(unsigned int tI = 0; tI < towerTrackStr.size(); ++tI){//Lets construct some algos
     for(unsigned int jI = 0; jI < jtAlgosNom.size(); ++jI){
+      if(towerTrackStr[tI].find("Tower") != std::string::npos){
+	if(jtAlgosNom[jI].find("4GeVCut") != std::string::npos){
+	  continue;
+	}
+      }
+
       jtAlgos.push_back(towerTrackStr[tI] + jtAlgosNom[jI]);
       jtAlphas.push_back(jtAlphasNom[jI]);
     }
 
-    for(unsigned int aI = 0; aI < alphaParams.size(); ++aI){
-      for(unsigned int jI = 0; jI < baseCS.size(); ++jI){
-	std::string jtStr = towerTrackStr[tI] + baseCS[jI] + "Alpha" + std::to_string(alphaParams[aI]);
-	jtAlgos.push_back(jtStr);
-	jtAlphas.push_back(alphaParams[aI]);
+    for(int rI = 0; rI < nIterRho; ++rI){
+      for(unsigned int aI = 0; aI < alphaParams.size(); ++aI){
+	for(unsigned int jI = 0; jI < baseCS.size(); ++jI){
+	  std::string jtStr = towerTrackStr[tI] + baseCS[jI] + "Alpha" + std::to_string(alphaParams[aI]) + "IterRho" + std::to_string(rI);
+	  jtAlgos.push_back(jtStr);
+	  jtAlphas.push_back(alphaParams[aI]);
+	}
       }
     }
   }
@@ -512,7 +527,7 @@ int makeClusterTree(std::string inConfigFileName)
     }
   }
   
-  const ULong64_t nEntries = TMath::Min((ULong64_t)5000, (ULong64_t)inTree_p->GetEntries());
+  const ULong64_t nEntries = TMath::Min((ULong64_t)200, (ULong64_t)inTree_p->GetEntries());
   const ULong64_t nDiv = TMath::Max((ULong64_t)1, nEntries/20);
 
   std::cout << "Processing " << nEntries << " TTree entries..." << std::endl;
@@ -604,134 +619,143 @@ int makeClusterTree(std::string inConfigFileName)
 
 
     if(doTracks){
-      cBuilder.Clean();
-      cBuilder.InitPtEtaPhiID(trk_pt_p, trk_eta_p, trk_phi_p, trk_tight_primary_p);
-      tempInputs = cBuilder.GetAllInputs(); //No ghosted negative inputs needed for tracks, only happens w/ towers
+      std::vector<std::vector<fastjet::PseudoJet > > jetsToExclude = {{}, {}};
 
-      //Do no-sub - this is slow because we run ClusterSequenceArea
-      fastjet::ClusterSequenceArea csA(tempInputs, jet_def, area_def);
-      tempJets = fastjet::sorted_by_pt(csA.inclusive_jets(recoJtMinPt));
-      std::string algo = trkStr + "NoSub";
-      if(!vectContainsStr(algo, &jtAlgos)) return 1;
-      unsigned int algoPos = algoToPosMap[algo];
-
-      if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
-
-
-      fillArrays(&tempJets, &njt_[algoPos], jtpt_[algoPos], jteta_[algoPos], jtphi_[algoPos], jtm_[algoPos], recoJtMinPt, jtMaxAbsEta);
-      
-      if(doSubMain) subMainLoop.push_back(cppWatch());
-      subMainLoop[subMainLoopPos].stop();
-      ++subMainLoopPos;
-      subMainLoop[subMainLoopPos].start();
-
-      //Build our globalghost collection and run jet-by-jet constituent subtraction
-      globalGhosts.clear();
-      globalGhostsIter.clear();
-
-      if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
-    
-      //We need to build our rho
-      if(!rBuilder.CalcRhoFromPtEta(trk_pt_p, trk_eta_p)) return 1;
-      if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
-      if(!rBuilder.SetRho(trkRhoOut_p)) return 1;
-      if(!rBuilder.SetRhoPt(trkPtRhoOut_p)) return 1;
-
-      if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
-
-      for(const auto & jet : tempJets){
-	realJetConst.clear();
-	realJetConstClean.clear();
-	realJetConstDirty.clear();
-	ghostJetConst.clear();
-	fastjet::SelectorIsPureGhost().sift(jet.constituents(), ghostJetConst, realJetConst);
-
-	for(unsigned int rI = 0; rI < realJetConst.size(); ++rI){
-	  if(cBuilder.IsUserIndexGhosted(realJetConst[rI].user_index())) realJetConstDirty.push_back(realJetConst[rI]);
-	  else realJetConstClean.push_back(realJetConst[rI]);
+      for(Int_t iI = 0; iI < nIterRho; ++iI){
+	cBuilder.Clean();
+	cBuilder.InitPtEtaPhiID(trk_pt_p, trk_eta_p, trk_phi_p, trk_tight_primary_p);
+	tempInputs = cBuilder.GetAllInputs(); //No ghosted negative inputs needed for tracks, only happens w/ towers
+	
+	//Do no-sub - this is slow because we run ClusterSequenceArea
+	fastjet::ClusterSequenceArea csA(tempInputs, jet_def, area_def);
+	tempJets = fastjet::sorted_by_pt(csA.inclusive_jets(recoJtMinPt));
+	std::string algo = trkStr + "NoSub";
+	if(!vectContainsStr(algo, &jtAlgos)) return 1;
+	unsigned int algoPos = algoToPosMap[algo];
+	
+	if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;	
+	
+	fillArrays(&tempJets, &njt_[algoPos], jtpt_[algoPos], jteta_[algoPos], jtphi_[algoPos], jtm_[algoPos], recoJtMinPt, jtMaxAbsEta);
+	
+	if(doSubMain) subMainLoop.push_back(cppWatch());
+	subMainLoop[subMainLoopPos].stop();
+	++subMainLoopPos;
+	subMainLoop[subMainLoopPos].start();
+	
+	//Build our globalghost collection and run jet-by-jet constituent subtraction
+	globalGhosts.clear();
+	globalGhostsIter.clear();
+	
+	if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+	
+	//We need to build our rho
+	if(iI == 0){
+	  if(!rBuilder.CalcRhoFromPtEtaPhi(trk_pt_p, trk_eta_p, trk_phi_p)) return 1;
+	}
+	else{
+	  if(!rBuilder.CalcRhoFromPtEtaPhi(trk_pt_p, trk_eta_p, trk_phi_p, &(jetsToExclude[0]), 0)) return 1;
 	}
 
-	rescaleGhosts(*trkRhoOut_p, *etaBinsOut_p, &ghostJetConst, 2.5);
-
-	globalGhosts.insert(std::end(globalGhosts), std::begin(ghostJetConst), std::end(ghostJetConst));
-	const Int_t nRealConst = realJetConstClean.size();
-	if(nRealConst == 0) continue;
-
-	for(unsigned int aI = 0; aI < alphaParams.size(); ++aI){
-	  algo = trkStr + "CSJetByJetAlpha" + std::to_string(alphaParams[aI]);
-	  if(!vectContainsStr(algo, &jtAlgos)) return 1;
-	  algoPos = algoToPosMap[algo];
+	if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+	if(!rBuilder.SetRho(trkRhoOut_p)) return 1;
+	if(!rBuilder.SetRhoPt(trkPtRhoOut_p)) return 1;
+	
+	if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+	
+	for(const auto & jet : tempJets){
+	  realJetConst.clear();
+	  realJetConstClean.clear();
+	  realJetConstDirty.clear();
+	  ghostJetConst.clear();
+	  fastjet::SelectorIsPureGhost().sift(jet.constituents(), ghostJetConst, realJetConst);
 	  
+	  for(unsigned int rI = 0; rI < realJetConst.size(); ++rI){
+	    if(cBuilder.IsUserIndexGhosted(realJetConst[rI].user_index())) realJetConstDirty.push_back(realJetConst[rI]);
+	    else realJetConstClean.push_back(realJetConst[rI]);
+	  }
+	  
+	  rescaleGhosts(*trkRhoOut_p, *etaBinsOut_p, &ghostJetConst, 2.5);
+	  
+	  globalGhosts.insert(std::end(globalGhosts), std::begin(ghostJetConst), std::end(ghostJetConst));
+	  const Int_t nRealConst = realJetConstClean.size();
+	  if(nRealConst == 0) continue;
+	  
+	  for(unsigned int aI = 0; aI < alphaParams.size(); ++aI){
+	    algo = trkStr + "CSJetByJetAlpha" + std::to_string(alphaParams[aI]) + "IterRho" + std::to_string(iI);
+	    if(!vectContainsStr(algo, &jtAlgos)) return 1;
+	    algoPos = algoToPosMap[algo];
+	    
+	    fastjet::contrib::ConstituentSubtractor subtractor;
+	    subtractor.set_distance_type(fastjet::contrib::ConstituentSubtractor::deltaR);
+	    subtractor.set_max_distance(rParam);
+	    subtractor.set_alpha(alphaParams[aI]);
+	    subtractor.set_remove_all_zero_pt_particles(true);
+	    subtractor.set_max_eta(maxGlobalAbsEta);
+	    subtracted_particles = subtractor.do_subtraction(realJetConstClean, ghostJetConst);
+	    
+	    fastjet::PseudoJet subtracted_jet = join(subtracted_particles);
+	    if(setJet(subtracted_jet, &(jtpt_[algoPos][njt_[algoPos]]), &(jteta_[algoPos][njt_[algoPos]]), &(jtphi_[algoPos][njt_[algoPos]]), &(jtm_[algoPos][njt_[algoPos]]), recoJtMinPt, jtMaxAbsEta)) ++(njt_[algoPos]);
+	  }
+	}
+	
+	if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+	
+	if(doSubMain) subMainLoop.push_back(cppWatch());
+	subMainLoop[subMainLoopPos].stop();
+	++subMainLoopPos;
+	subMainLoop[subMainLoopPos].start();
+	
+	cBuilder.Clean();
+	cBuilder.InitPtEtaPhiID(trk_pt_p, trk_eta_p, trk_phi_p, trk_tight_primary_p, 4.0);
+	tempInputs = cBuilder.GetCleanInputs();
+	fastjet::ClusterSequence cs4(tempInputs, jet_def);
+	tempJets = fastjet::sorted_by_pt(cs4.inclusive_jets(recoJtMinPt));
+	algo = trkStr + "4GeVCut";
+	if(!vectContainsStr(algo, &jtAlgos)) return 1;
+	algoPos = algoToPosMap[algo];
+	fillArrays(&tempJets, &njt_[algoPos], jtpt_[algoPos], jteta_[algoPos], jtphi_[algoPos], jtm_[algoPos], recoJtMinPt, jtMaxAbsEta);      
+	
+	cBuilder.Clean();
+	cBuilder.InitPtEtaPhiID(trk_pt_p, trk_eta_p, trk_phi_p, trk_tight_primary_p);
+	tempInputs = cBuilder.GetAllInputs(); 
+	for(unsigned int aI = 0; aI < alphaParams.size(); ++aI){
 	  fastjet::contrib::ConstituentSubtractor subtractor;
 	  subtractor.set_distance_type(fastjet::contrib::ConstituentSubtractor::deltaR);
 	  subtractor.set_max_distance(rParam);
 	  subtractor.set_alpha(alphaParams[aI]);
-	  subtractor.set_remove_all_zero_pt_particles(true);
 	  subtractor.set_max_eta(maxGlobalAbsEta);
-	  subtracted_particles = subtractor.do_subtraction(realJetConstClean, ghostJetConst);
-	
-	  fastjet::PseudoJet subtracted_jet = join(subtracted_particles);
-	  if(setJet(subtracted_jet, &(jtpt_[algoPos][njt_[algoPos]]), &(jteta_[algoPos][njt_[algoPos]]), &(jtphi_[algoPos][njt_[algoPos]]), &(jtm_[algoPos][njt_[algoPos]]), recoJtMinPt, jtMaxAbsEta)) ++(njt_[algoPos]);
-	}
+	  subtractor.set_remove_all_zero_pt_particles(true);
+	  //	subtractor.set_keep_original_masses();
+	  subtracted_particles = subtractor.do_subtraction(tempInputs, globalGhosts, &globalGhostsIter);
+	  
+	  fastjet::ClusterSequence cs(subtracted_particles, jet_def);
+	  tempJets = fastjet::sorted_by_pt(cs.inclusive_jets(recoJtMinPt));
+	  algo = trkStr + "CSGlobalAlpha" + std::to_string(alphaParams[aI]) + "IterRho" + std::to_string(iI);
+	  if(!vectContainsStr(algo, &jtAlgos)) return 1;
+	  algoPos = algoToPosMap[algo];
+	  
+	  fillArrays(&tempJets, &njt_[algoPos], jtpt_[algoPos], jteta_[algoPos], jtphi_[algoPos], jtm_[algoPos], recoJtMinPt, jtMaxAbsEta);      	
+
+	  for(unsigned int eI = 0; eI < trkRhoIterOut_p->size(); ++eI){
+	    trkRhoIterOut_p->at(eI) = 0.0;
+	  }
+	  
+	  if(!rBuilder.CalcRhoFromPseudoJet(&globalGhostsIter)) return 1;
+	  if(!rBuilder.SetRho(trkRhoIterOut_p)) return 1;
+	  
+	  rescaleGhosts(*trkRhoIterOut_p, *etaBinsOut_p, &globalGhosts, 2.5);
+	  
+	  subtracted_particles_iter = subtractor.do_subtraction(subtracted_particles, globalGhosts);       	
+	  
+	  fastjet::ClusterSequence csIter(subtracted_particles_iter, jet_def);
+	  tempJets = fastjet::sorted_by_pt(csIter.inclusive_jets(recoJtMinPt));
+       	  algo = trkStr + "CSGlobalIterAlpha" + std::to_string(alphaParams[aI]) + "IterRho" + std::to_string(iI);
+	  if(!vectContainsStr(algo, &jtAlgos)) return 1;
+	  algoPos = algoToPosMap[algo];
+	  
+	  fillArrays(&tempJets, &njt_[algoPos], jtpt_[algoPos], jteta_[algoPos], jtphi_[algoPos], jtm_[algoPos], recoJtMinPt, jtMaxAbsEta);      		
+	}      
       }
-      
-      if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
-
-      if(doSubMain) subMainLoop.push_back(cppWatch());
-      subMainLoop[subMainLoopPos].stop();
-      ++subMainLoopPos;
-      subMainLoop[subMainLoopPos].start();
-
-      cBuilder.Clean();
-      cBuilder.InitPtEtaPhiID(trk_pt_p, trk_eta_p, trk_phi_p, trk_tight_primary_p, 4.0);
-      tempInputs = cBuilder.GetCleanInputs();
-      fastjet::ClusterSequence cs4(tempInputs, jet_def);
-      tempJets = fastjet::sorted_by_pt(cs4.inclusive_jets(recoJtMinPt));
-      algo = trkStr + "4GeVCut";
-      if(!vectContainsStr(algo, &jtAlgos)) return 1;
-      algoPos = algoToPosMap[algo];
-      fillArrays(&tempJets, &njt_[algoPos], jtpt_[algoPos], jteta_[algoPos], jtphi_[algoPos], jtm_[algoPos], recoJtMinPt, jtMaxAbsEta);      
-    
-      cBuilder.Clean();
-      cBuilder.InitPtEtaPhiID(trk_pt_p, trk_eta_p, trk_phi_p, trk_tight_primary_p);
-      tempInputs = cBuilder.GetAllInputs(); 
-      for(unsigned int aI = 0; aI < alphaParams.size(); ++aI){
-	fastjet::contrib::ConstituentSubtractor subtractor;
-	subtractor.set_distance_type(fastjet::contrib::ConstituentSubtractor::deltaR);
-	subtractor.set_max_distance(rParam);
-	subtractor.set_alpha(alphaParams[aI]);
-	subtractor.set_max_eta(maxGlobalAbsEta);
-	subtractor.set_remove_all_zero_pt_particles(true);
-	//	subtractor.set_keep_original_masses();
-	subtracted_particles = subtractor.do_subtraction(tempInputs, globalGhosts, &globalGhostsIter);
-
-	fastjet::ClusterSequence cs(subtracted_particles, jet_def);
-	tempJets = fastjet::sorted_by_pt(cs.inclusive_jets(recoJtMinPt));
-	algo = trkStr + "CSGlobalAlpha" + std::to_string(alphaParams[aI]);
-	if(!vectContainsStr(algo, &jtAlgos)) return 1;
-	algoPos = algoToPosMap[algo];
-      
-	fillArrays(&tempJets, &njt_[algoPos], jtpt_[algoPos], jteta_[algoPos], jtphi_[algoPos], jtm_[algoPos], recoJtMinPt, jtMaxAbsEta);      	
-
-	for(unsigned int eI = 0; eI < trkRhoIterOut_p->size(); ++eI){
-	  trkRhoIterOut_p->at(eI) = 0.0;
-	}
-
-	if(!rBuilder.CalcRhoFromPseudoJet(&globalGhostsIter)) return 1;
-	if(!rBuilder.SetRho(trkRhoIterOut_p)) return 1;
-	
-	rescaleGhosts(*trkRhoIterOut_p, *etaBinsOut_p, &globalGhosts, 2.5);
-
-	subtracted_particles_iter = subtractor.do_subtraction(subtracted_particles, globalGhosts);       	
-
-	fastjet::ClusterSequence csIter(subtracted_particles_iter, jet_def);
-	tempJets = fastjet::sorted_by_pt(csIter.inclusive_jets(recoJtMinPt));
-	algo = trkStr + "CSGlobalIterAlpha" + std::to_string(alphaParams[aI]);
-	if(!vectContainsStr(algo, &jtAlgos)) return 1;
-	algoPos = algoToPosMap[algo];
-
-	fillArrays(&tempJets, &njt_[algoPos], jtpt_[algoPos], jteta_[algoPos], jtphi_[algoPos], jtm_[algoPos], recoJtMinPt, jtMaxAbsEta);      		
-      }      
     }
 
     if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
@@ -743,107 +767,135 @@ int makeClusterTree(std::string inConfigFileName)
     subMainLoop[subMainLoopPos].start();
   
     if(doTowers){
-      cBuilder.Clean();
-      cBuilder.InitPtEtaPhi(tower_pt_p, tower_eta_p, tower_phi_p);
-      tempInputs = cBuilder.GetAllInputs(); 
+      std::vector<std::vector<fastjet::PseudoJet > > jetsToExclude = {{}, {}};
 
-      //Do no-sub - this is slow because we run ClusterSequenceArea
-      fastjet::ClusterSequenceArea csA(tempInputs, jet_def, area_def);
-      tempJets = fastjet::sorted_by_pt(csA.inclusive_jets(recoJtMinPt));
-      std::string algo = towerStr + "NoSub";
-      if(!vectContainsStr(algo, &jtAlgos)) return 1;
-      unsigned int algoPos = algoToPosMap[algo];
+      for(Int_t iI = 0; iI < nIterRho; ++iI){
+	cBuilder.Clean();
+	cBuilder.InitPtEtaPhi(tower_pt_p, tower_eta_p, tower_phi_p);
+	tempInputs = cBuilder.GetAllInputs(); 
 
-      fillArrays(&tempJets, &njt_[algoPos], jtpt_[algoPos], jteta_[algoPos], jtphi_[algoPos], jtm_[algoPos], recoJtMinPt, jtMaxAbsEta);
-      
-      if(doSubMain) subMainLoop.push_back(cppWatch());
-      subMainLoop[subMainLoopPos].stop();
-      ++subMainLoopPos;
-      subMainLoop[subMainLoopPos].start();
+	//Do no-sub - this is slow because we run ClusterSequenceArea
+	fastjet::ClusterSequenceArea csA(tempInputs, jet_def, area_def);
+	tempJets = fastjet::sorted_by_pt(csA.inclusive_jets(recoJtMinPt));
+	std::string algo = towerStr + "NoSub";
+	if(!vectContainsStr(algo, &jtAlgos)) return 1;
+	unsigned int algoPos = algoToPosMap[algo];
+	
+	fillArrays(&tempJets, &njt_[algoPos], jtpt_[algoPos], jteta_[algoPos], jtphi_[algoPos], jtm_[algoPos], recoJtMinPt, jtMaxAbsEta);
+	
+	if(doSubMain) subMainLoop.push_back(cppWatch());
+	subMainLoop[subMainLoopPos].stop();
+	++subMainLoopPos;
+	subMainLoop[subMainLoopPos].start();
+	
+	//Build our globalghost collection and run jet-by-jet constituent subtraction
+	globalGhosts.clear();
+	globalGhostsIter.clear();
+	
+	if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+	
+	//We need to build our rho
+	if(iI == 0){
+	  if(!rBuilder.CalcRhoFromPtEtaPhi(tower_pt_p, tower_eta_p, tower_phi_p)) return 1;
+	}
+	else{
+	  if(!rBuilder.CalcRhoFromPtEtaPhi(tower_pt_p, tower_eta_p, tower_phi_p, &(jetsToExclude[0]), 1)) return 1;
+	}
 
-      //Build our globalghost collection and run jet-by-jet constituent subtraction
-      globalGhosts.clear();
-      globalGhostsIter.clear();
-
-      if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
-    
-      //We need to build our rho
-      if(!rBuilder.CalcRhoFromPtEta(tower_pt_p, tower_eta_p)) return 1;
-      if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
-      if(!rBuilder.SetRho(towerRhoOut_p)) return 1;
-      if(!rBuilder.SetRhoPt(towerPtRhoOut_p)) return 1;
-
-      
-      for(const auto & jet : tempJets){
-	realJetConst.clear();
-	realJetConstClean.clear();
-	realJetConstDirty.clear();
-	ghostJetConst.clear();
-	fastjet::SelectorIsPureGhost().sift(jet.constituents(), ghostJetConst, realJetConst);
-
-	for(unsigned int rI = 0; rI < realJetConst.size(); ++rI){
-	  if(cBuilder.IsUserIndexGhosted(realJetConst[rI].user_index())) realJetConstDirty.push_back(realJetConst[rI]);
-	  else realJetConstClean.push_back(realJetConst[rI]);
+	if(!rBuilder.SetRho(towerRhoOut_p)) return 1;
+	if(!rBuilder.SetRhoPt(towerPtRhoOut_p)) return 1;
+	
+	
+	for(const auto & jet : tempJets){
+	  realJetConst.clear();
+	  realJetConstClean.clear();
+	  realJetConstDirty.clear();
+	  ghostJetConst.clear();
+	  fastjet::SelectorIsPureGhost().sift(jet.constituents(), ghostJetConst, realJetConst);
+	  
+	  for(unsigned int rI = 0; rI < realJetConst.size(); ++rI){
+	    if(cBuilder.IsUserIndexGhosted(realJetConst[rI].user_index())) realJetConstDirty.push_back(realJetConst[rI]);
+	    else realJetConstClean.push_back(realJetConst[rI]);
+	  }
+	  
+	  rescaleGhosts(*towerRhoOut_p, *etaBinsOut_p, &ghostJetConst, 5.0);
+	  globalGhosts.insert(std::end(globalGhosts), std::begin(ghostJetConst), std::end(ghostJetConst));
+	  const Int_t nRealConst = realJetConstClean.size();
+	  if(nRealConst == 0) continue;
+	  
+	  for(unsigned int aI = 0; aI < alphaParams.size(); ++aI){
+	    algo = towerStr + "CSJetByJetAlpha" + std::to_string(alphaParams[aI]) + "IterRho" + std::to_string(iI);
+	    if(!vectContainsStr(algo, &jtAlgos)) return 1;
+	    algoPos = algoToPosMap[algo];
+	    
+	    fastjet::contrib::ConstituentSubtractor subtractor;
+	    subtractor.set_distance_type(fastjet::contrib::ConstituentSubtractor::deltaR);
+	    subtractor.set_max_distance(rParam);
+	    subtractor.set_alpha(alphaParams[aI]);
+	    subtractor.set_remove_all_zero_pt_particles(true);
+	    subtractor.set_max_eta(maxGlobalAbsEta);
+	    subtracted_particles = subtractor.do_subtraction(realJetConstClean, ghostJetConst);
+	    
+	    fastjet::PseudoJet subtracted_jet = join(subtracted_particles);
+	    if(setJet(subtracted_jet, &(jtpt_[algoPos][njt_[algoPos]]), &(jteta_[algoPos][njt_[algoPos]]), &(jtphi_[algoPos][njt_[algoPos]]), &(jtm_[algoPos][njt_[algoPos]]), recoJtMinPt, jtMaxAbsEta)) ++(njt_[algoPos]);
+	  }
 	}
 	
-	rescaleGhosts(*towerRhoOut_p, *etaBinsOut_p, &ghostJetConst, 5.0);
-	globalGhosts.insert(std::end(globalGhosts), std::begin(ghostJetConst), std::end(ghostJetConst));
-	const Int_t nRealConst = realJetConstClean.size();
-	if(nRealConst == 0) continue;
-
+	tempInputs = cBuilder.GetAllInputs(); 
 	for(unsigned int aI = 0; aI < alphaParams.size(); ++aI){
-	  algo = towerStr + "CSJetByJetAlpha" + std::to_string(alphaParams[aI]);
-	  if(!vectContainsStr(algo, &jtAlgos)) return 1;
-	  algoPos = algoToPosMap[algo];
-	  
 	  fastjet::contrib::ConstituentSubtractor subtractor;
 	  subtractor.set_distance_type(fastjet::contrib::ConstituentSubtractor::deltaR);
 	  subtractor.set_max_distance(rParam);
 	  subtractor.set_alpha(alphaParams[aI]);
-	  subtractor.set_remove_all_zero_pt_particles(true);
 	  subtractor.set_max_eta(maxGlobalAbsEta);
-	  subtracted_particles = subtractor.do_subtraction(realJetConstClean, ghostJetConst);
+	  subtractor.set_remove_all_zero_pt_particles(true);
+	  //	subtractor.set_keep_original_masses();
+	  subtracted_particles = subtractor.do_subtraction(tempInputs, globalGhosts, &globalGhostsIter);
+	  
+	  fastjet::ClusterSequence cs(subtracted_particles, jet_def);
+	  tempJets = fastjet::sorted_by_pt(cs.inclusive_jets(recoJtMinPt));
+	  algo = towerStr + "CSGlobalAlpha" + std::to_string(alphaParams[aI]);
+	  if(!vectContainsStr(algo, &jtAlgos)) return 1;
+	  algoPos = algoToPosMap[algo];
+	 
+	  if(iI == 0){
+	    for(unsigned int tI = 0; tI < tempJets.size(); ++tI){
+	      jetsToExclude[0].push_back(tempJets[tI]);
+	    }
+	  }
 
-	  fastjet::PseudoJet subtracted_jet = join(subtracted_particles);
-	  if(setJet(subtracted_jet, &(jtpt_[algoPos][njt_[algoPos]]), &(jteta_[algoPos][njt_[algoPos]]), &(jtphi_[algoPos][njt_[algoPos]]), &(jtm_[algoPos][njt_[algoPos]]), recoJtMinPt, jtMaxAbsEta)) ++(njt_[algoPos]);
-	}
-      }
+	  fillArrays(&tempJets, &njt_[algoPos], jtpt_[algoPos], jteta_[algoPos], jtphi_[algoPos], jtm_[algoPos], recoJtMinPt, jtMaxAbsEta);      	
 
-      tempInputs = cBuilder.GetAllInputs(); 
-      for(unsigned int aI = 0; aI < alphaParams.size(); ++aI){
-	fastjet::contrib::ConstituentSubtractor subtractor;
-	subtractor.set_distance_type(fastjet::contrib::ConstituentSubtractor::deltaR);
-	subtractor.set_max_distance(rParam);
-	subtractor.set_alpha(alphaParams[aI]);
-	subtractor.set_max_eta(maxGlobalAbsEta);
-	subtractor.set_remove_all_zero_pt_particles(true);
-	//	subtractor.set_keep_original_masses();
-	subtracted_particles = subtractor.do_subtraction(tempInputs, globalGhosts, &globalGhostsIter);
+	  
+	  for(unsigned int eI = 0; eI < towerRhoIterOut_p->size(); ++eI){
+	    towerRhoIterOut_p->at(eI) = 0.0;
+	  }
+	  
+	  if(iI == 0){
+	    if(!rBuilder.CalcRhoFromPseudoJet(&globalGhostsIter)) return 1;
+	  }
+	  else{
+	    if(!rBuilder.CalcRhoFromPseudoJet(&globalGhostsIter, &(jetsToExclude[1]), 1)) return 1;
+	  }
+	  if(!rBuilder.SetRho(towerRhoIterOut_p)) return 1;
+      	  
+	  rescaleGhosts(*towerRhoIterOut_p, *etaBinsOut_p, &globalGhosts, 5.0);
+	  subtracted_particles = subtractor.do_subtraction(subtracted_particles, globalGhosts);
+	  fastjet::ClusterSequence csIter(subtracted_particles, jet_def);
+	  tempJets = fastjet::sorted_by_pt(csIter.inclusive_jets(recoJtMinPt));
+	  algo = towerStr + "CSGlobalIterAlpha" + std::to_string(alphaParams[aI]) + "IterRho" + std::to_string(iI);
+	  if(!vectContainsStr(algo, &jtAlgos)) return 1;
+	  algoPos = algoToPosMap[algo];
+	  
+	  if(iI == 0){
+	    for(unsigned int tI = 0; tI < tempJets.size(); ++tI){
+	      jetsToExclude[1].push_back(tempJets[tI]);
+	    }
+	  }
 
-	fastjet::ClusterSequence cs(subtracted_particles, jet_def);
-	tempJets = fastjet::sorted_by_pt(cs.inclusive_jets(recoJtMinPt));
-	algo = towerStr + "CSGlobalAlpha" + std::to_string(alphaParams[aI]);
-	if(!vectContainsStr(algo, &jtAlgos)) return 1;
-	algoPos = algoToPosMap[algo];
-      
-	fillArrays(&tempJets, &njt_[algoPos], jtpt_[algoPos], jteta_[algoPos], jtphi_[algoPos], jtm_[algoPos], recoJtMinPt, jtMaxAbsEta);      	
-
-	for(unsigned int eI = 0; eI < towerRhoIterOut_p->size(); ++eI){
-	  towerRhoIterOut_p->at(eI) = 0.0;
-	}
-        if(!rBuilder.CalcRhoFromPseudoJet(&globalGhostsIter)) return 1;
-        if(!rBuilder.SetRho(towerRhoIterOut_p)) return 1;
-
-	rescaleGhosts(*towerRhoIterOut_p, *etaBinsOut_p, &globalGhosts, 5.0);
-	subtracted_particles = subtractor.do_subtraction(subtracted_particles, globalGhosts);
-	fastjet::ClusterSequence csIter(subtracted_particles, jet_def);
-	tempJets = fastjet::sorted_by_pt(csIter.inclusive_jets(recoJtMinPt));
-	algo = towerStr + "CSGlobalIterAlpha" + std::to_string(alphaParams[aI]);
-	if(!vectContainsStr(algo, &jtAlgos)) return 1;
-	algoPos = algoToPosMap[algo];
-
-	fillArrays(&tempJets, &njt_[algoPos], jtpt_[algoPos], jteta_[algoPos], jtphi_[algoPos], jtm_[algoPos], recoJtMinPt, jtMaxAbsEta);      		
-      }      
+	  fillArrays(&tempJets, &njt_[algoPos], jtpt_[algoPos], jteta_[algoPos], jtphi_[algoPos], jtm_[algoPos], recoJtMinPt, jtMaxAbsEta);      		
+	}     
+      } 
     }
 
     if(isMC){

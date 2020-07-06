@@ -196,8 +196,9 @@ int makeClusterHist(std::string inConfigFileName)
   
   TFile* outFile_p = new TFile(outFileName.c_str(), "RECREATE");
   TH1D* cent_p = new TH1D("cent_h", ";Centrality (%);Weighted Counts", 100, -0.5, 99.5);
+  TH1D* cent_CentWeightOnly_p = new TH1D("cent_CentWeightOnly_h", ";Centrality (%);Weighted Counts", 100, -0.5, 99.5);
   TH1D* cent_Unweighted_p = new TH1D("cent_Unweighted_h", ";Centrality (%);Unweighted Counts", 100, -0.5, 99.5);
-  centerTitles({cent_p, cent_Unweighted_p});
+  centerTitles({cent_p, cent_CentWeightOnly_p, cent_Unweighted_p});
 
   TH1D* spectra_p[nMaxJtAlgo+1][nCentBins];
   TH1D* spectraUnmatched_p[nMaxJtAlgo][nCentBins];
@@ -378,6 +379,7 @@ int makeClusterHist(std::string inConfigFileName)
   if(doDebug) std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 
     Double_t weight = 1.0;
+    Double_t centWeight = 1.0;
     if(doJZWeights && isMC){
       int xsecPos = -1;
       for(unsigned int xI = 0; xI < uniqueXSec.size(); ++xI){
@@ -399,10 +401,12 @@ int makeClusterHist(std::string inConfigFileName)
     }
     if(doCentWeights){
       int centInt_ = (int)cent_;
-      weight *= centWeightMap[centInt_]/centCounter[centInt_];
+      centWeight = centWeightMap[centInt_]/centCounter[centInt_];
+      weight *= centWeight;
     }
 
     cent_p->Fill(cent_, weight);
+    cent_CentWeightOnly_p->Fill(cent_, centWeight);
     cent_Unweighted_p->Fill(cent_);
 
     if(doDebug) std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
@@ -526,6 +530,9 @@ int makeClusterHist(std::string inConfigFileName)
 
   cent_p->Write("", TObject::kOverwrite);
   delete cent_p;
+
+  cent_CentWeightOnly_p->Write("", TObject::kOverwrite);
+  delete cent_CentWeightOnly_p;
 
   cent_Unweighted_p->Write("", TObject::kOverwrite);
   delete cent_Unweighted_p;

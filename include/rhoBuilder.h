@@ -21,9 +21,9 @@ class rhoBuilder{
   rhoBuilder(std::vector<double> inEtaBins);
   bool Init(std::vector<float> inEtaBins);
   bool Init(std::vector<double> inEtaBins);
-  bool CalcRhoFromPseudoJet(std::vector<fastjet::PseudoJet>* constituents_p);
-  bool CalcRhoFromPtEta(std::vector<float>* pt_p, std::vector<float>* eta_p);
-  bool CalcRhoFromPtEta(std::vector<double>* pt_p, std::vector<double>* eta_p);
+  bool CalcRhoFromPseudoJet(std::vector<fastjet::PseudoJet>* constituents_p, std::vector<fastjet::PseudoJet>* jets_p=nullptr, bool doTowerExclude=false);
+  bool CalcRhoFromPtEtaPhi(std::vector<float>* pt_p, std::vector<float>* eta_p, std::vector<float>* phi_p, std::vector<fastjet::PseudoJet>* jets_p=nullptr, bool doTowerExclude=false);
+  bool CalcRhoFromPtEtaPhi(std::vector<double>* pt_p, std::vector<double>* eta_p, std::vector<double>* phi_p, std::vector<fastjet::PseudoJet>* jets_p=nullptr, bool doTowerExclude=false);
   bool SetRho(std::vector<double>* rho_p);
   bool SetRho(std::vector<float>* rho_p);
   bool SetRhoPt(std::vector<double>* rhoPt_p);
@@ -39,6 +39,9 @@ class rhoBuilder{
   std::vector<double> m_etaBins;
   std::vector<double> m_rhoVals;  
   std::vector<double> m_rhoPtVals;  
+  std::vector<int> m_nExcluded;
+
+  std::vector<double> m_towerPhiBounds;
 
   int posInBins(double val, std::vector<double>* bins);
 };

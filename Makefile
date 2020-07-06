@@ -45,7 +45,8 @@ MKDIR_OBJ=mkdir -p $(QTDIR)/obj
 MKDIR_OUTPUT=mkdir -p $(QTDIR)/output
 MKDIR_PDF=mkdir -p $(QTDIR)/pdfDir
 
-all: mkdirBin mkdirLib mkdirObj mkdirOutput mkdirPdf obj/checkMakeDir.o obj/constituentBuilder.o obj/globalDebugHandler.o obj/rhoBuilder.o obj/sampleHandler.o obj/configParser.o obj/centralityFromInput.o obj/towerWeightTwol.o lib/libCSATLAS.so bin/makeClusterTree.exe bin/makeClusterHist.exe bin/plotClusterHist.exe bin/deriveSampleWeights.exe bin/deriveCentWeights.exe bin/validateRho.exe bin/validateRhoHist.exe bin/validateRhoPlot.exe bin/clusterToCS.exe
+
+all: mkdirBin mkdirLib mkdirObj mkdirOutput mkdirPdf obj/checkMakeDir.o obj/constituentBuilder.o obj/globalDebugHandler.o  obj/rhoBuilder.o obj/sampleHandler.o obj/configParser.o obj/centralityFromInput.o obj/towerWeightTwol.o lib/libCSATLAS.so bin/analyzeTowers.exe bin/makeClusterTree.exe bin/makeClusterHist.exe bin/plotClusterHist.exe bin/deriveSampleWeights.exe bin/deriveCentWeights.exe bin/validateRho.exe bin/validateRhoHist.exe bin/validateRhoPlot.exe bin/clusterToCS.exe bin/testSegmentArea.exe
 
 mkdirBin:
 	$(MKDIR_BIN)
@@ -75,7 +76,7 @@ obj/constituentBuilder.o: src/constituentBuilder.C
 	$(CXX) $(CXXFLAGS) -fPIC -c src/constituentBuilder.C -o obj/constituentBuilder.o $(FASTJET) $(ROOT) $(INCLUDE)
 
 obj/rhoBuilder.o: src/rhoBuilder.C
-	$(CXX) $(CXXFLAGS) -fPIC -c src/rhoBuilder.C -o obj/rhoBuilder.o $(FASTJET) $(INCLUDE)
+	$(CXX) $(CXXFLAGS) -fPIC -c src/rhoBuilder.C -o obj/rhoBuilder.o $(FASTJET) $(ROOT) $(INCLUDE)
 
 obj/sampleHandler.o: src/sampleHandler.C
 	$(CXX) $(CXXFLAGS) -fPIC -c src/sampleHandler.C -o obj/sampleHandler.o $(INCLUDE)
@@ -99,6 +100,9 @@ bin/makeClusterTree.exe: src/makeClusterTree.C
 bin/clusterToCS.exe: src/clusterToCS.C
 	$(CXX) $(CXXFLAGS) src/clusterToCS.C $(ROOT) $(FJCONTRIB) $(FASTJET) $(INCLUDE) $(LIB) -lCSATLAS -fopenmp -o bin/clusterToCS.exe
 
+bin/testSegmentArea.exe: src/testSegmentArea.C
+	$(CXX) $(CXXFLAGS) src/testSegmentArea.C $(ROOT) $(FJCONTRIB) $(FASTJET) $(INCLUDE) $(LIB) -lCSATLAS -fopenmp -o bin/testSegmentArea.exe
+
 bin/makeClusterHist.exe: src/makeClusterHist.C
 	$(CXX) $(CXXFLAGS) src/makeClusterHist.C $(ROOT) $(INCLUDE) $(LIB) -lCSATLAS -o bin/makeClusterHist.exe
 
@@ -107,6 +111,9 @@ bin/plotClusterHist.exe: src/plotClusterHist.C
 
 bin/deriveSampleWeights.exe: src/deriveSampleWeights.C
 	$(CXX) $(CXXFLAGS) src/deriveSampleWeights.C $(INCLUDE) $(ROOT) $(LIB) -lCSATLAS -o bin/deriveSampleWeights.exe
+
+bin/analyzeTowers.exe: src/analyzeTowers.C
+	$(CXX) $(CXXFLAGS) src/analyzeTowers.C $(INCLUDE) $(ROOT) $(FASTJET) $(LIB) -lCSATLAS -o bin/analyzeTowers.exe
 
 bin/deriveCentWeights.exe: src/deriveCentWeights.C
 	$(CXX) $(CXXFLAGS) src/deriveCentWeights.C $(INCLUDE) $(ROOT) $(LIB) -lCSATLAS -o bin/deriveCentWeights.exe
