@@ -1,7 +1,7 @@
 //Author: Chris McG!inn (2020.01.28)
 
 //cpp
-#include <cmath>
+#include <math.h>
 #include <iostream>
 
 //Local
@@ -51,6 +51,7 @@ bool rhoBuilder::Init(std::vector<double> inEtaBins)
       m_rhoVals.push_back(0.0);
       m_rhoPtVals.push_back(0.0);
       m_nExcluded.push_back(0);
+      m_areaVals.push_back(0.0);
       if(inEtaBins[eI] < inEtaBins[eI-1]){
 	m_isInit = false;
 	break;
@@ -115,6 +116,7 @@ bool rhoBuilder::CalcRhoFromPtEtaPhi(std::vector<double>* pt_p, std::vector<doub
 
   for(unsigned int rI = 0; rI < m_rhoVals.size(); ++rI){m_rhoVals[rI] = 0.0;}
   for(unsigned int rI = 0; rI < m_rhoPtVals.size(); ++rI){m_rhoPtVals[rI] = 0.0;}
+  for(unsigned int rI = 0; rI < m_areaVals.size(); ++rI){m_areaVals[rI] = 0.0;}
   for(unsigned int rI = 0; rI < m_nExcluded.size(); ++rI){m_nExcluded[rI] = 0;}
   
   if(m_doGlobalDebug) std::cout << "GLOBAL DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
@@ -158,6 +160,7 @@ bool rhoBuilder::CalcRhoFromPtEtaPhi(std::vector<double>* pt_p, std::vector<doub
 
       
     double area = 2.*M_PI*(m_etaBins[rI+1] - m_etaBins[rI]);
+    const double startArea = area;
     if(jets_p != nullptr){
       const double jetR = 0.4;
 
@@ -169,27 +172,23 @@ bool rhoBuilder::CalcRhoFromPtEtaPhi(std::vector<double>* pt_p, std::vector<doub
 	  bool overlap = false;
 	  if(TMath::Abs(jets_p->at(jI).eta() - m_etaBins[rI+1]) < jetR) overlap = true;
 	  else if(TMath::Abs(jets_p->at(jI).eta() - m_etaBins[rI]) < jetR) overlap = true;
-
 	  if(!overlap) continue;
 
 	  const double dEta1 = jets_p->at(jI).eta() - m_etaBins[rI+1];
 	  const double dEta2 = jets_p->at(jI).eta() - m_etaBins[rI];
 
-	  double startArea = area;
 	  double tempArea = 0.0;
 	  if((dEta1 < 0 && dEta2 < 0) || (dEta1 > 0 && dEta2 > 0)){
 	    const double dEtaMin = TMath::Min(TMath::Abs(dEta1), TMath::Abs(dEta2));
 	    const double dEtaMax = TMath::Max(TMath::Abs(dEta1), TMath::Abs(dEta2));
-
-	    const double thetaMin = std::acos(dEta1/jetR);
-
+	    const double thetaMin = std::acos(dEtaMin/jetR);
 	    
 	    tempArea = thetaMin*jetR*jetR - dEtaMin*jetR*std::sin(thetaMin);
 	    if(jetR > dEtaMax){
 	      const double thetaMax = std::acos(dEtaMax/jetR);	      
 	      double areaCorrection = thetaMax*jetR*jetR - dEtaMax*jetR*std::sin(thetaMax);
 	      tempArea -= areaCorrection;
-	    }	  
+	    }
 	  }
 	  else{
 	    const double theta1 = std::acos(dEta1/jetR);
@@ -198,14 +197,14 @@ bool rhoBuilder::CalcRhoFromPtEtaPhi(std::vector<double>* pt_p, std::vector<doub
 
 	    tempArea = dEta1*jetR*std::sin(theta1) + dEta2*jetR*std::sin(theta2) + theta3*jetR*jetR;
 	  }
-	
 	  area -= tempArea;
-
+   
 	  if(area/startArea < 0.5) break;
 	}
       }
     }
 
+    m_areaVals[rI] = area;
     m_rhoVals[rI] /= area;
     //    m_rhoPtVals[rI] /= area;
     double etaVal = (m_etaBins[rI+1] + m_etaBins[rI])/2.;
@@ -218,7 +217,37 @@ bool rhoBuilder::CalcRhoFromPtEtaPhi(std::vector<double>* pt_p, std::vector<doub
   return true;
 }
 
-bool rhoBuilder::SetRho(std::vector<float>* rho_p)
+bool rhoBuilder::CalcRhoFromPtEtaPhiID(std::vector<float>* pt_p, std::vector<float>* eta_p, std::vector<float>* phi_p, std::vector<bool>* id_p, std::vector<fastjet::PseudoJet>* jets_p, bool doTowerExclude)
+{
+  if(m_doGlobalDebug) std::cout << "GLOBAL DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+  std::vector<double> ptD_, etaD_, phiD_;
+  for(unsigned int pI = 0; pI < pt_p->size(); ++pI){
+    if(!(id_p->at(pI))) continue;
+
+    ptD_.push_back((*pt_p)[pI]);
+    etaD_.push_back((*eta_p)[pI]);
+    phiD_.push_back((*phi_p)[pI]);
+  }
+  if(m_doGlobalDebug) std::cout << "GLOBAL DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+  return CalcRhoFromPtEtaPhi(&ptD_, &etaD_, &phiD_, jets_p, doTowerExclude);
+}
+
+bool rhoBuilder::CalcRhoFromPtEtaPhiID(std::vector<double>* pt_p, std::vector<double>* eta_p, std::vector<double>* phi_p, std::vector<bool>* id_p, std::vector<fastjet::PseudoJet>* jets_p, bool doTowerExclude)
+{
+  if(m_doGlobalDebug) std::cout << "GLOBAL DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+  std::vector<double> ptD_, etaD_, phiD_;
+  for(unsigned int pI = 0; pI < pt_p->size(); ++pI){
+    if(!(id_p->at(pI))) continue;
+
+    ptD_.push_back((*pt_p)[pI]);
+    etaD_.push_back((*eta_p)[pI]);
+    phiD_.push_back((*phi_p)[pI]);
+  }
+  if(m_doGlobalDebug) std::cout << "GLOBAL DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+  return CalcRhoFromPtEtaPhi(&ptD_, &etaD_, &phiD_, jets_p, doTowerExclude);
+}
+
+bool rhoBuilder::SetRho(std::vector<float>* rho_p, std::vector<float>* area_p)
 {
   if(!m_isInit){
     std::cout << "ERROR IN RHOBUILDER SETRHO: rhoBuilder is not initialized! return false" << std::endl;
@@ -231,12 +260,13 @@ bool rhoBuilder::SetRho(std::vector<float>* rho_p)
   
   for(unsigned int rI = 0; rI < m_rhoVals.size(); ++rI){
     (*rho_p)[rI] = m_rhoVals[rI];
+    if(area_p != nullptr) (*area_p)[rI] = m_areaVals[rI];
   }  
 
   return true;
 }
 
-bool rhoBuilder::SetRho(std::vector<double>* rho_p)
+bool rhoBuilder::SetRho(std::vector<double>* rho_p, std::vector<double>* area_p)
 {
   if(!m_isInit){
     std::cout << "ERROR IN RHOBUILDER SETRHO: rhoBuilder is not initialized! return false" << std::endl;
@@ -249,6 +279,7 @@ bool rhoBuilder::SetRho(std::vector<double>* rho_p)
   
   for(unsigned int rI = 0; rI < m_rhoVals.size(); ++rI){
     (*rho_p)[rI] = m_rhoVals[rI];
+    if(area_p != nullptr) (*area_p)[rI] = m_areaVals[rI];
   }  
   return true;
 }
@@ -331,7 +362,8 @@ int rhoBuilder::posInBins(double val, std::vector<double>* bins)
   }
   else if(val >= (*bins)[bins->size()-1]){
     pos = bins->size()-2;    
-    std::cout << "WARNING IN RHOBUILDER POSINBINS: Given val \'" << val << "\' is greater than upper edge of bins vector, \'" << (*bins)[bins->size()] << "\'. return position \'" << pos << "\' corresponding to " << (*bins)[bins->size()-2] << "-" << (*bins)[bins->size()-1] << std::endl;
+
+    if(val > (*bins)[bins->size()-1] + ((*bins)[bins->size()-1] - (*bins)[bins->size()-2])) std::cout << "WARNING IN RHOBUILDER POSINBINS: Given val \'" << val << "\' is greater than upper edge of bins vector, \'" << (*bins)[bins->size()-1] << "\'. return position \'" << pos << "\' corresponding to " << (*bins)[bins->size()-2] << "-" << (*bins)[bins->size()-1] << std::endl;
   }
   else{
     for(unsigned int bI = 0; bI < bins->size()-1; ++bI){

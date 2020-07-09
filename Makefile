@@ -46,7 +46,7 @@ MKDIR_OUTPUT=mkdir -p $(QTDIR)/output
 MKDIR_PDF=mkdir -p $(QTDIR)/pdfDir
 
 
-all: mkdirBin mkdirLib mkdirObj mkdirOutput mkdirPdf obj/checkMakeDir.o obj/constituentBuilder.o obj/globalDebugHandler.o  obj/rhoBuilder.o obj/sampleHandler.o obj/configParser.o obj/centralityFromInput.o obj/towerWeightTwol.o lib/libCSATLAS.so bin/analyzeTowers.exe bin/makeClusterTree.exe bin/makeClusterHist.exe bin/plotClusterHist.exe bin/deriveSampleWeights.exe bin/deriveCentWeights.exe bin/validateRho.exe bin/validateRhoHist.exe bin/validateRhoPlot.exe bin/clusterToCS.exe bin/testSegmentArea.exe
+all: mkdirBin mkdirLib mkdirObj mkdirOutput mkdirPdf obj/checkMakeDir.o obj/constituentBuilder.o obj/globalDebugHandler.o  obj/rhoBuilder.o obj/sampleHandler.o obj/configParser.o obj/centralityFromInput.o obj/towerWeightTwol.o lib/libCSATLAS.so bin/analyzeTowers.exe bin/makeClusterTree.exe bin/makeClusterHist.exe bin/plotClusterHist.exe bin/deriveSampleWeights.exe bin/deriveCentWeights.exe bin/validateRho.exe bin/validateRhoHist.exe bin/validateRhoPlot.exe bin/clusterToCS.exe bin/testSegmentArea.exe bin/scrambleLines.exe
 
 mkdirBin:
 	$(MKDIR_BIN)
@@ -126,6 +126,9 @@ bin/validateRhoHist.exe: src/validateRhoHist.C
 
 bin/validateRhoPlot.exe: src/validateRhoPlot.C
 	$(CXX) $(CXXFLAGS) src/validateRhoPlot.C $(INCLUDE) $(ROOT) $(FASTJET) $(LIB) -lCSATLAS -o bin/validateRhoPlot.exe
+
+bin/scrambleLines.exe: src/scrambleLines.C
+	$(CXX) $(CXXFLAGS) src/scrambleLines.C $(INCLUDE) $(ROOT) $(LIB) -lCSATLAS -o bin/scrambleLines.exe
 
 clean:
 	rm -f ./*~

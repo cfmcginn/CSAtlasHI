@@ -22,7 +22,7 @@ inline int ghostPos(std::vector<float> bins_, double ghostVal)
   }
   else if(ghostVal>=bins_.at(bins_.size()-1)){
     ghostPos = bins_.size()-2;//-2 because etabins are 1 greater than rhobins                
-    std::cout << "WARNING MAKECLUSTERTREE GHOSTPOS: Given value \'" << ghostVal << "\' is above binning (high edge \'" << bins_[bins_.size()-1] << "\'). return pos " << bins_.size()-2 << ", " << bins_[bins_.size()-2] << "-" << bins_[bins_.size()-1] << std::endl;
+    if(ghostVal > bins_.at(bins_.size()-1) + (bins_.at(bins_.size()-1) - bins_.at(bins_.size()-2))) std::cout << "WARNING MAKECLUSTERTREE GHOSTPOS: Given value \'" << ghostVal << "\' is above binning (high edge \'" << bins_[bins_.size()-1] << "\'). return pos " << bins_.size()-2 << ", " << bins_[bins_.size()-2] << "-" << bins_[bins_.size()-1] << std::endl;
   }
   else{
     for(unsigned int ie = 0; ie < bins_.size()-1; ++ie){

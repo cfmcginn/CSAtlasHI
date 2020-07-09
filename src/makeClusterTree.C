@@ -36,6 +36,7 @@
 #include "include/returnRootFileContentsList.h"
 #include "include/rhoBuilder.h"
 #include "include/sampleHandler.h"
+#include "include/sharedFunctions.h"
 #include "include/stringUtil.h"
 #include "include/ttreeUtil.h"
 
@@ -127,7 +128,6 @@ void rescaleGhosts(std::vector<float> rho_, std::vector<float> etaBins_, std::ve
     if(TMath::Abs(ighost.eta()) > rescaleEtaCap) continue;
     //    if(isinf(ighost.eta())) continue;
     //    if(TMath::Abs(ighost.eta()) > 10.) continue;
-
     int ghostPos = ghostEtaPos(etaBins_, ighost);
 
     double E = (rho_.at(ghostPos))*ighost.area();
@@ -167,6 +167,25 @@ int makeClusterTree(std::string inConfigFileName)
   if(!check.checkFileExt(inConfigFileName, "config")) return 1; // Check input is valid Config file
 
   TEnv* inConfig_p = new TEnv(inConfigFileName.c_str());
+
+  std::vector<std::string> reqParams = {"INFILENAME",
+					"CENTFILENAME",
+					"NEVTCAP",
+					"ISMC",
+					"DOTRACKS",
+					"DOTOWERS", 
+					"DOITERRHO",
+					"GHOSTAREA",
+					"CSDRJETBYJET",
+					"CSDRGLOBAL",
+					"CSDRGLOBALITER0",
+					"CSDRGLOBALITER1",
+					"RECOJTMINPT",
+					"GENJTMINPT",
+					"JTMAXABSETA"};
+
+  if(!checkConfigContainsParams(inConfig_p, reqParams)) return 1;
+
   std::string inROOTFileName = inConfig_p->GetValue("INFILENAME", "");
   std::string inCentFileName = inConfig_p->GetValue("CENTFILENAME", "");
   
@@ -184,6 +203,8 @@ int makeClusterTree(std::string inConfigFileName)
   const bool doTracks = inConfig_p->GetValue("DOTRACKS", 0);
   const bool doTowers = inConfig_p->GetValue("DOTOWERS", 0);  
 
+  const ULong64_t nEvtCap = inConfig_p->GetValue("NEVTCAP", 1);
+
   const bool doIterRho = inConfig_p->GetValue("DOITERRHO", 1);  
   Int_t nIterRhoTemp = 1;
   if(doIterRho) ++nIterRhoTemp;
@@ -199,6 +220,11 @@ int makeClusterTree(std::string inConfigFileName)
   
   const double ghost_area = inConfig_p->GetValue("GHOSTAREA", 0.01);
   
+  const double csDRJetByJet = inConfig_p->GetValue("CSDRJETBYJET", 0.4);
+  const double csDRGlobal = inConfig_p->GetValue("CSDRGLOBAL", 0.4);
+  const double csDRGlobalIter0 = inConfig_p->GetValue("CSDRGLOBALITER0", 0.4);
+  const double csDRGlobalIter1 = inConfig_p->GetValue("CSDRGLOBALITER0", 0.4);
+
   const double recoJtMinPt = inConfig_p->GetValue("RECOJTMINPT", 10.);
   const double genJtMinPt = inConfig_p->GetValue("GENJTMINPT", 10.);
   const double jtMaxAbsEta = inConfig_p->GetValue("JTMAXABSETA", 2.5);  
@@ -229,6 +255,7 @@ int makeClusterTree(std::string inConfigFileName)
 					 "fcalA_et",
 					 "fcalC_et",
 					 "akt4hi_em_xcalib_jet_pt",
+					 "akt4hi_em_xcalib_jet_uncorrpt",
 					 "akt4hi_em_xcalib_jet_eta",
 					 "akt4hi_em_xcalib_jet_phi"}; // Define baseline branch names we will want to use
 
@@ -274,6 +301,7 @@ int makeClusterTree(std::string inConfigFileName)
   std::vector<float>* tower_phi_p=nullptr;
 
   std::vector<float>* akt4hi_em_xcalib_jet_pt_p=nullptr;
+  std::vector<float>* akt4hi_em_xcalib_jet_uncorrpt_p=nullptr;
   std::vector<float>* akt4hi_em_xcalib_jet_phi_p=nullptr;
   std::vector<float>* akt4hi_em_xcalib_jet_eta_p=nullptr;
   
@@ -306,6 +334,7 @@ int makeClusterTree(std::string inConfigFileName)
   }
 
   inTree_p->SetBranchAddress("akt4hi_em_xcalib_jet_pt", &akt4hi_em_xcalib_jet_pt_p);
+  inTree_p->SetBranchAddress("akt4hi_em_xcalib_jet_uncorrpt", &akt4hi_em_xcalib_jet_uncorrpt_p);
   inTree_p->SetBranchAddress("akt4hi_em_xcalib_jet_eta", &akt4hi_em_xcalib_jet_eta_p);
   inTree_p->SetBranchAddress("akt4hi_em_xcalib_jet_phi", &akt4hi_em_xcalib_jet_phi_p);
   
@@ -332,19 +361,48 @@ int makeClusterTree(std::string inConfigFileName)
   Float_t cent_;
 
   std::vector<float>* etaBinsOut_p=new std::vector<float>;
+  std::vector<float>* etaCentOut_p=new std::vector<float>;
 
-  std::vector<float>* trkRhoOut_p=new std::vector<float>;
-  std::vector<float>* trkRhoIterOut_p=new std::vector<float>;
-  std::vector<float>* trkRhoCorrOut_p=new std::vector<float>;
-  std::vector<float>* trkPtRhoOut_p=new std::vector<float>;
-  std::vector<float>* trkPtRhoCorrOut_p=new std::vector<float>;
+  std::vector<std::vector<float>* > trkRhoJetByJetOut_p;
+  std::vector<std::vector<float>* > trkRhoGlobalOut_p;
+  std::vector<std::vector<float>* > trkRhoGlobalIter0Out_p;
+  std::vector<std::vector<float>* > trkRhoGlobalIter1Out_p;
+  std::vector<std::vector<float>* > towerRhoJetByJetOut_p;
+  std::vector<std::vector<float>* > towerRhoGlobalOut_p;
+  std::vector<std::vector<float>* > towerRhoGlobalIter0Out_p;
+  std::vector<std::vector<float>* > towerRhoGlobalIter1Out_p;
 
-  std::vector<float>* towerRhoOut_p=new std::vector<float>;
-  std::vector<float>* towerRhoIterOut_p=new std::vector<float>;
-  std::vector<float>* towerRhoCorrOut_p=new std::vector<float>;
-  std::vector<float>* towerPtRhoOut_p=new std::vector<float>;
-  std::vector<float>* towerPtRhoCorrOut_p=new std::vector<float>;
-  
+  std::vector<std::vector<float>* > trkAreaJetByJetOut_p;
+  std::vector<std::vector<float>* > trkAreaGlobalOut_p;
+  std::vector<std::vector<float>* > trkAreaGlobalIter0Out_p;
+  std::vector<std::vector<float>* > trkAreaGlobalIter1Out_p;
+  std::vector<std::vector<float>* > towerAreaJetByJetOut_p;
+  std::vector<std::vector<float>* > towerAreaGlobalOut_p;
+  std::vector<std::vector<float>* > towerAreaGlobalIter0Out_p;
+  std::vector<std::vector<float>* > towerAreaGlobalIter1Out_p;
+
+  for(int rI = 0; rI < nIterRho; ++rI){
+    trkRhoJetByJetOut_p.push_back(new std::vector<float>);
+    trkRhoGlobalOut_p.push_back(new std::vector<float>);
+    trkRhoGlobalIter0Out_p.push_back(new std::vector<float>);
+    trkRhoGlobalIter1Out_p.push_back(new std::vector<float>);
+
+    towerRhoJetByJetOut_p.push_back(new std::vector<float>);
+    towerRhoGlobalOut_p.push_back(new std::vector<float>);
+    towerRhoGlobalIter0Out_p.push_back(new std::vector<float>);
+    towerRhoGlobalIter1Out_p.push_back(new std::vector<float>);
+
+    trkAreaJetByJetOut_p.push_back(new std::vector<float>);
+    trkAreaGlobalOut_p.push_back(new std::vector<float>);
+    trkAreaGlobalIter0Out_p.push_back(new std::vector<float>);
+    trkAreaGlobalIter1Out_p.push_back(new std::vector<float>);
+
+    towerAreaJetByJetOut_p.push_back(new std::vector<float>);
+    towerAreaGlobalOut_p.push_back(new std::vector<float>);
+    towerAreaGlobalIter0Out_p.push_back(new std::vector<float>);
+    towerAreaGlobalIter1Out_p.push_back(new std::vector<float>);
+  }
+
   //Following is set of defined params not supplied in config
   const Int_t nMaxJets = 500;
   const Int_t nMaxJtAlgo = 20; //Number of algos temp hard-coded
@@ -356,17 +414,30 @@ int makeClusterTree(std::string inConfigFileName)
   const Double_t etaWidth = 0.1;
   etaBinsOut_p->push_back(-maxGlobalAbsEta);
   while(etaBinsOut_p->at(etaBinsOut_p->size()-1) < maxGlobalAbsEta - etaWidth/2.){
+    etaCentOut_p->push_back(etaBinsOut_p->at(etaBinsOut_p->size()-1) + etaWidth/2.);
     etaBinsOut_p->push_back(etaBinsOut_p->at(etaBinsOut_p->size()-1) + etaWidth);
-    trkRhoOut_p->push_back(0.0);
-    trkRhoIterOut_p->push_back(0.0);
-    trkRhoCorrOut_p->push_back(0.0);
-    trkPtRhoOut_p->push_back(0.0);
-    trkPtRhoCorrOut_p->push_back(0.0);
-    towerRhoOut_p->push_back(0.0);
-    towerRhoIterOut_p->push_back(0.0);
-    towerRhoCorrOut_p->push_back(0.0);
-    towerPtRhoOut_p->push_back(0.0);
-    towerPtRhoCorrOut_p->push_back(0.0);
+
+    for(int rI = 0; rI < nIterRho; ++rI){
+      trkRhoJetByJetOut_p[rI]->push_back(0.0);
+      trkRhoGlobalOut_p[rI]->push_back(0.0);
+      trkRhoGlobalIter0Out_p[rI]->push_back(0.0);
+      trkRhoGlobalIter1Out_p[rI]->push_back(0.0);
+
+      towerRhoJetByJetOut_p[rI]->push_back(0.0);
+      towerRhoGlobalOut_p[rI]->push_back(0.0);
+      towerRhoGlobalIter0Out_p[rI]->push_back(0.0);
+      towerRhoGlobalIter1Out_p[rI]->push_back(0.0);
+
+      trkAreaJetByJetOut_p[rI]->push_back(0.0);
+      trkAreaGlobalOut_p[rI]->push_back(0.0);
+      trkAreaGlobalIter0Out_p[rI]->push_back(0.0);
+      trkAreaGlobalIter1Out_p[rI]->push_back(0.0);
+
+      towerAreaJetByJetOut_p[rI]->push_back(0.0);
+      towerAreaGlobalOut_p[rI]->push_back(0.0);
+      towerAreaGlobalIter0Out_p[rI]->push_back(0.0);
+      towerAreaGlobalIter1Out_p[rI]->push_back(0.0);
+    }
   }  
   
   const int active_area_repeats = 1;
@@ -441,6 +512,7 @@ int makeClusterTree(std::string inConfigFileName)
   
   Int_t njtATLAS_;
   Float_t jtptATLAS_[nMaxJets];
+  Float_t jtuncorrptATLAS_[nMaxJets];
   Float_t jtetaATLAS_[nMaxJets];
   Float_t jtphiATLAS_[nMaxJets];
 
@@ -473,16 +545,30 @@ int makeClusterTree(std::string inConfigFileName)
 
   outTree_p->Branch("cent", &cent_, "cent/F");
   outTree_p->Branch("etaBins", &etaBinsOut_p);
-  outTree_p->Branch("trkRho", &trkRhoOut_p);
-  outTree_p->Branch("trkRhoIter", &trkRhoIterOut_p);
-  outTree_p->Branch("trkRhoCorr", &trkRhoCorrOut_p);
-  outTree_p->Branch("trkPtRho", &trkPtRhoOut_p);
-  outTree_p->Branch("trkPtRhoCorr", &trkPtRhoCorrOut_p);
-  outTree_p->Branch("towerRho", &towerRhoOut_p);
-  outTree_p->Branch("towerRhoIter", &towerRhoIterOut_p);
-  outTree_p->Branch("towerRhoCorr", &towerRhoCorrOut_p);
-  outTree_p->Branch("towerPtRho", &towerPtRhoOut_p);
-  outTree_p->Branch("towerPtRhoCorr", &towerPtRhoCorrOut_p);
+  outTree_p->Branch("etaCent", &etaCentOut_p);
+
+  for(int rI = 0; rI < nIterRho; ++rI){
+    outTree_p->Branch(("trkRhoJetByJetIterRho" + std::to_string(rI)).c_str(), &(trkRhoJetByJetOut_p[rI]));
+    outTree_p->Branch(("trkRhoGlobalIterRho" + std::to_string(rI)).c_str(), &(trkRhoGlobalOut_p[rI]));
+    outTree_p->Branch(("trkRhoGlobalIter0IterRho" + std::to_string(rI)).c_str(), &(trkRhoGlobalIter0Out_p[rI]));
+    outTree_p->Branch(("trkRhoGlobalIter1IterRho" + std::to_string(rI)).c_str(), &(trkRhoGlobalIter1Out_p[rI]));
+
+    outTree_p->Branch(("towerRhoJetByJetIterRho" + std::to_string(rI)).c_str(), &(towerRhoJetByJetOut_p[rI]));
+    outTree_p->Branch(("towerRhoGlobalIterRho" + std::to_string(rI)).c_str(), &(towerRhoGlobalOut_p[rI]));
+    outTree_p->Branch(("towerRhoGlobalIter0IterRho" + std::to_string(rI)).c_str(), &(towerRhoGlobalIter0Out_p[rI]));
+    outTree_p->Branch(("towerRhoGlobalIter1IterRho" + std::to_string(rI)).c_str(), &(towerRhoGlobalIter1Out_p[rI]));
+
+    outTree_p->Branch(("trkAreaJetByJetIterRho" + std::to_string(rI)).c_str(), &(trkAreaJetByJetOut_p[rI]));
+    outTree_p->Branch(("trkAreaGlobalIterRho" + std::to_string(rI)).c_str(), &(trkAreaGlobalOut_p[rI]));
+    outTree_p->Branch(("trkAreaGlobalIter0IterRho" + std::to_string(rI)).c_str(), &(trkAreaGlobalIter0Out_p[rI]));
+    outTree_p->Branch(("trkAreaGlobalIter1IterRho" + std::to_string(rI)).c_str(), &(trkAreaGlobalIter1Out_p[rI]));
+
+    outTree_p->Branch(("towerAreaJetByJetIterRho" + std::to_string(rI)).c_str(), &(towerAreaJetByJetOut_p[rI]));
+    outTree_p->Branch(("towerAreaGlobalIterRho" + std::to_string(rI)).c_str(), &(towerAreaGlobalOut_p[rI]));
+    outTree_p->Branch(("towerAreaGlobalIter0IterRho" + std::to_string(rI)).c_str(), &(towerAreaGlobalIter0Out_p[rI]));
+    outTree_p->Branch(("towerAreaGlobalIter1IterRho" + std::to_string(rI)).c_str(), &(towerAreaGlobalIter1Out_p[rI]));
+  }
+
 
   for(Int_t jI = 0; jI < nJtAlgo; ++jI){
     outTree_p->Branch(("njt" + jtAlgos[jI]).c_str(), &(njt_[jI]), ("njt" + jtAlgos[jI] + "/I").c_str());
@@ -500,6 +586,7 @@ int makeClusterTree(std::string inConfigFileName)
   
   outTree_p->Branch("njtATLAS", &njtATLAS_, "njtATLAS/I");
   outTree_p->Branch("jtptATLAS", jtptATLAS_, "jtptATLAS[njtATLAS]/F");
+  outTree_p->Branch("jtuncorrptATLAS", jtuncorrptATLAS_, "jtuncorrptATLAS[njtATLAS]/F");
   outTree_p->Branch("jtetaATLAS", jtetaATLAS_, "jtetaATLAS[njtATLAS]/F");
   outTree_p->Branch("jtphiATLAS", jtphiATLAS_, "jtphiATLAS[njtATLAS]/F");
 
@@ -527,7 +614,7 @@ int makeClusterTree(std::string inConfigFileName)
     }
   }
   
-  const ULong64_t nEntries = TMath::Min((ULong64_t)200, (ULong64_t)inTree_p->GetEntries());
+  const ULong64_t nEntries = TMath::Min((ULong64_t)nEvtCap, (ULong64_t)inTree_p->GetEntries());
   const ULong64_t nDiv = TMath::Max((ULong64_t)1, nEntries/20);
 
   std::cout << "Processing " << nEntries << " TTree entries..." << std::endl;
@@ -551,7 +638,20 @@ int makeClusterTree(std::string inConfigFileName)
     ++subMainLoopPos;
     subMainLoop[subMainLoopPos].start();
   
-    fillArrays(akt4hi_em_xcalib_jet_pt_p, akt4hi_em_xcalib_jet_eta_p, akt4hi_em_xcalib_jet_phi_p, &njtATLAS_, jtptATLAS_, jtetaATLAS_, jtphiATLAS_, recoJtMinPt, jtMaxAbsEta);
+    //    fillArrays(akt4hi_em_xcalib_jet_pt_p, akt4hi_em_xcalib_jet_uncorrpt_p, akt4hi_em_xcalib_jet_eta_p, akt4hi_em_xcalib_jet_phi_p, &njtATLAS_, jtptATLAS_, jtuncorrptATLAS_, jtetaATLAS_, jtphiATLAS_, recoJtMinPt, jtMaxAbsEta);
+    //fillArrays 
+    njtATLAS_ = 0;
+    for(unsigned int jI = 0; jI < akt4hi_em_xcalib_jet_pt_p->size(); ++jI){
+      if(akt4hi_em_xcalib_jet_pt_p->at(jI) < recoJtMinPt) continue;
+      if(TMath::Abs(akt4hi_em_xcalib_jet_eta_p->at(jI)) >= jtMaxAbsEta) continue;
+
+      jtptATLAS_[njtATLAS_] = akt4hi_em_xcalib_jet_pt_p->at(jI);
+      jtuncorrptATLAS_[njtATLAS_] = akt4hi_em_xcalib_jet_uncorrpt_p->at(jI);
+      jtetaATLAS_[njtATLAS_] = akt4hi_em_xcalib_jet_eta_p->at(jI);
+      jtphiATLAS_[njtATLAS_] = akt4hi_em_xcalib_jet_phi_p->at(jI);
+      ++njtATLAS_;
+    }
+
     if(isMC){
       fillArrays(akt4_truth_jet_pt_p, akt4_truth_jet_eta_p, akt4_truth_jet_phi_p, &njtTruth_, jtptTruth_, jtetaTruth_, jtphiTruth_, genJtMinPt, jtMaxAbsEta);
 
@@ -619,16 +719,19 @@ int makeClusterTree(std::string inConfigFileName)
 
 
     if(doTracks){
-      std::vector<std::vector<fastjet::PseudoJet > > jetsToExclude = {{}, {}};
+      //Position 0 Jet-by-jet iter0, 1 global iter0, 2 global iter iter0
+      std::vector<std::vector<fastjet::PseudoJet > > jetsToExclude = {{}, {}, {}};
 
       for(Int_t iI = 0; iI < nIterRho; ++iI){
 	cBuilder.Clean();
+	if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 	cBuilder.InitPtEtaPhiID(trk_pt_p, trk_eta_p, trk_phi_p, trk_tight_primary_p);
+	if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 	tempInputs = cBuilder.GetAllInputs(); //No ghosted negative inputs needed for tracks, only happens w/ towers
 	
 	//Do no-sub - this is slow because we run ClusterSequenceArea
 	fastjet::ClusterSequenceArea csA(tempInputs, jet_def, area_def);
-	tempJets = fastjet::sorted_by_pt(csA.inclusive_jets(recoJtMinPt));
+	tempJets = fastjet::sorted_by_pt(csA.inclusive_jets(0));
 	std::string algo = trkStr + "NoSub";
 	if(!vectContainsStr(algo, &jtAlgos)) return 1;
 	unsigned int algoPos = algoToPosMap[algo];
@@ -650,16 +753,31 @@ int makeClusterTree(std::string inConfigFileName)
 	
 	//We need to build our rho
 	if(iI == 0){
-	  if(!rBuilder.CalcRhoFromPtEtaPhi(trk_pt_p, trk_eta_p, trk_phi_p)) return 1;
+	  if(!rBuilder.CalcRhoFromPtEtaPhiID(trk_pt_p, trk_eta_p, trk_phi_p, trk_tight_primary_p)) return 1;
+
+	  if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+
+	  if(!rBuilder.SetRho(trkRhoJetByJetOut_p[iI], trkAreaJetByJetOut_p[iI])) return 1;
+	  if(!rBuilder.SetRho(trkRhoGlobalOut_p[iI], trkAreaGlobalOut_p[iI])) return 1;
+	  if(!rBuilder.SetRho(trkRhoGlobalIter0Out_p[iI], trkAreaGlobalIter0Out_p[iI])) return 1;
 	}
 	else{
-	  if(!rBuilder.CalcRhoFromPtEtaPhi(trk_pt_p, trk_eta_p, trk_phi_p, &(jetsToExclude[0]), 0)) return 1;
+	  if(!rBuilder.CalcRhoFromPtEtaPhiID(trk_pt_p, trk_eta_p, trk_phi_p, trk_tight_primary_p, &(jetsToExclude[0]), 0)) return 1;
+	  if(!rBuilder.SetRho(trkRhoJetByJetOut_p[iI], trkAreaJetByJetOut_p[iI])) return 1;
+
+	  if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+
+	  if(!rBuilder.CalcRhoFromPtEtaPhiID(trk_pt_p, trk_eta_p, trk_phi_p, trk_tight_primary_p, &(jetsToExclude[1]), 0)) return 1;
+	  if(!rBuilder.SetRho(trkRhoGlobalOut_p[iI], trkAreaGlobalOut_p[iI])) return 1;
+
+	  if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+
+	  if(!rBuilder.CalcRhoFromPtEtaPhiID(trk_pt_p, trk_eta_p, trk_phi_p, trk_tight_primary_p, &(jetsToExclude[2]), 0)) return 1;
+	  if(!rBuilder.SetRho(trkRhoGlobalIter0Out_p[iI], trkAreaGlobalIter0Out_p[iI])) return 1;
+
+	  if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 	}
 
-	if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
-	if(!rBuilder.SetRho(trkRhoOut_p)) return 1;
-	if(!rBuilder.SetRhoPt(trkPtRhoOut_p)) return 1;
-	
 	if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 	
 	for(const auto & jet : tempJets){
@@ -674,9 +792,9 @@ int makeClusterTree(std::string inConfigFileName)
 	    else realJetConstClean.push_back(realJetConst[rI]);
 	  }
 	  
-	  rescaleGhosts(*trkRhoOut_p, *etaBinsOut_p, &ghostJetConst, 2.5);
-	  
 	  globalGhosts.insert(std::end(globalGhosts), std::begin(ghostJetConst), std::end(ghostJetConst));
+	  rescaleGhosts(*(trkRhoJetByJetOut_p[iI]), *etaBinsOut_p, &ghostJetConst, 2.5);
+	  
 	  const Int_t nRealConst = realJetConstClean.size();
 	  if(nRealConst == 0) continue;
 	  
@@ -687,14 +805,18 @@ int makeClusterTree(std::string inConfigFileName)
 	    
 	    fastjet::contrib::ConstituentSubtractor subtractor;
 	    subtractor.set_distance_type(fastjet::contrib::ConstituentSubtractor::deltaR);
-	    subtractor.set_max_distance(rParam);
+	    subtractor.set_max_distance(csDRJetByJet);
 	    subtractor.set_alpha(alphaParams[aI]);
 	    subtractor.set_remove_all_zero_pt_particles(true);
 	    subtractor.set_max_eta(maxGlobalAbsEta);
 	    subtracted_particles = subtractor.do_subtraction(realJetConstClean, ghostJetConst);
 	    
 	    fastjet::PseudoJet subtracted_jet = join(subtracted_particles);
-	    if(setJet(subtracted_jet, &(jtpt_[algoPos][njt_[algoPos]]), &(jteta_[algoPos][njt_[algoPos]]), &(jtphi_[algoPos][njt_[algoPos]]), &(jtm_[algoPos][njt_[algoPos]]), recoJtMinPt, jtMaxAbsEta)) ++(njt_[algoPos]);
+	    if(setJet(subtracted_jet, &(jtpt_[algoPos][njt_[algoPos]]), &(jteta_[algoPos][njt_[algoPos]]), &(jtphi_[algoPos][njt_[algoPos]]), &(jtm_[algoPos][njt_[algoPos]]), recoJtMinPt, jtMaxAbsEta)){
+	      ++(njt_[algoPos]);
+	      
+	      if(iI == 0) jetsToExclude[0].push_back(subtracted_jet);
+	    }
 	  }
 	}
 	
@@ -706,7 +828,11 @@ int makeClusterTree(std::string inConfigFileName)
 	subMainLoop[subMainLoopPos].start();
 	
 	cBuilder.Clean();
+	if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 	cBuilder.InitPtEtaPhiID(trk_pt_p, trk_eta_p, trk_phi_p, trk_tight_primary_p, 4.0);
+		
+	if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+      
 	tempInputs = cBuilder.GetCleanInputs();
 	fastjet::ClusterSequence cs4(tempInputs, jet_def);
 	tempJets = fastjet::sorted_by_pt(cs4.inclusive_jets(recoJtMinPt));
@@ -717,34 +843,55 @@ int makeClusterTree(std::string inConfigFileName)
 	
 	cBuilder.Clean();
 	cBuilder.InitPtEtaPhiID(trk_pt_p, trk_eta_p, trk_phi_p, trk_tight_primary_p);
-	tempInputs = cBuilder.GetAllInputs(); 
+	if(doGlobalDebug) std::cout << "DEBUG FILE, LINE, EVENT#, iteration: " << __FILE__ << ", " << __LINE__ << ", " << entry << ", " << iI << std::endl;
 	for(unsigned int aI = 0; aI < alphaParams.size(); ++aI){
 	  fastjet::contrib::ConstituentSubtractor subtractor;
 	  subtractor.set_distance_type(fastjet::contrib::ConstituentSubtractor::deltaR);
-	  subtractor.set_max_distance(rParam);
+	  subtractor.set_max_distance(csDRGlobal);
 	  subtractor.set_alpha(alphaParams[aI]);
 	  subtractor.set_max_eta(maxGlobalAbsEta);
 	  subtractor.set_remove_all_zero_pt_particles(true);
 	  //	subtractor.set_keep_original_masses();
+	  rescaleGhosts(*(trkRhoGlobalOut_p[iI]), *etaBinsOut_p, &globalGhosts, 2.5);
+
+	  if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+	  tempInputs = cBuilder.GetAllInputs(); 
+	  if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+
 	  subtracted_particles = subtractor.do_subtraction(tempInputs, globalGhosts, &globalGhostsIter);
 	  
+	  if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 	  fastjet::ClusterSequence cs(subtracted_particles, jet_def);
 	  tempJets = fastjet::sorted_by_pt(cs.inclusive_jets(recoJtMinPt));
+	  if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 	  algo = trkStr + "CSGlobalAlpha" + std::to_string(alphaParams[aI]) + "IterRho" + std::to_string(iI);
 	  if(!vectContainsStr(algo, &jtAlgos)) return 1;
 	  algoPos = algoToPosMap[algo];
-	  
-	  fillArrays(&tempJets, &njt_[algoPos], jtpt_[algoPos], jteta_[algoPos], jtphi_[algoPos], jtm_[algoPos], recoJtMinPt, jtMaxAbsEta);      	
 
-	  for(unsigned int eI = 0; eI < trkRhoIterOut_p->size(); ++eI){
-	    trkRhoIterOut_p->at(eI) = 0.0;
+	  if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+	  if(iI == 0){
+	    jetsToExclude[1] = tempJets;
 	  }
 	  
+	  if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+	  fillArrays(&tempJets, &njt_[algoPos], jtpt_[algoPos], jteta_[algoPos], jtphi_[algoPos], jtm_[algoPos], recoJtMinPt, jtMaxAbsEta);      	
+
+
+	  if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+	  rescaleGhosts(*(trkRhoGlobalIter0Out_p[iI]), *etaBinsOut_p, &globalGhosts, 2.5);
+	  if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+          tempInputs = cBuilder.GetAllInputs();
+	  if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+
+	  subtractor.set_max_distance(csDRGlobalIter0);
+          subtracted_particles = subtractor.do_subtraction(tempInputs, globalGhosts, &globalGhostsIter);
+
 	  if(!rBuilder.CalcRhoFromPseudoJet(&globalGhostsIter)) return 1;
-	  if(!rBuilder.SetRho(trkRhoIterOut_p)) return 1;
+	  if(!rBuilder.SetRho(trkRhoGlobalIter1Out_p[iI], trkAreaGlobalIter1Out_p[iI])) return 1;
 	  
-	  rescaleGhosts(*trkRhoIterOut_p, *etaBinsOut_p, &globalGhosts, 2.5);
+	  rescaleGhosts(*(trkRhoGlobalIter1Out_p[iI]), *etaBinsOut_p, &globalGhosts, 2.5);
 	  
+	  subtractor.set_max_distance(csDRGlobalIter1);
 	  subtracted_particles_iter = subtractor.do_subtraction(subtracted_particles, globalGhosts);       	
 	  
 	  fastjet::ClusterSequence csIter(subtracted_particles_iter, jet_def);
@@ -753,6 +900,10 @@ int makeClusterTree(std::string inConfigFileName)
 	  if(!vectContainsStr(algo, &jtAlgos)) return 1;
 	  algoPos = algoToPosMap[algo];
 	  
+	  if(iI == 0){
+	    jetsToExclude[2] = tempJets;
+	  }
+
 	  fillArrays(&tempJets, &njt_[algoPos], jtpt_[algoPos], jteta_[algoPos], jtphi_[algoPos], jtm_[algoPos], recoJtMinPt, jtMaxAbsEta);      		
 	}      
       }
@@ -767,16 +918,18 @@ int makeClusterTree(std::string inConfigFileName)
     subMainLoop[subMainLoopPos].start();
   
     if(doTowers){
-      std::vector<std::vector<fastjet::PseudoJet > > jetsToExclude = {{}, {}};
+      //Position 0 Jet-by-jet iter0, 1 global iter0, 2 global iter iter0
+      std::vector<std::vector<fastjet::PseudoJet > > jetsToExclude = {{}, {}, {}};
 
       for(Int_t iI = 0; iI < nIterRho; ++iI){
 	cBuilder.Clean();
 	cBuilder.InitPtEtaPhi(tower_pt_p, tower_eta_p, tower_phi_p);
+	if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 	tempInputs = cBuilder.GetAllInputs(); 
 
 	//Do no-sub - this is slow because we run ClusterSequenceArea
 	fastjet::ClusterSequenceArea csA(tempInputs, jet_def, area_def);
-	tempJets = fastjet::sorted_by_pt(csA.inclusive_jets(recoJtMinPt));
+	tempJets = fastjet::sorted_by_pt(csA.inclusive_jets(0));
 	std::string algo = towerStr + "NoSub";
 	if(!vectContainsStr(algo, &jtAlgos)) return 1;
 	unsigned int algoPos = algoToPosMap[algo];
@@ -797,29 +950,55 @@ int makeClusterTree(std::string inConfigFileName)
 	//We need to build our rho
 	if(iI == 0){
 	  if(!rBuilder.CalcRhoFromPtEtaPhi(tower_pt_p, tower_eta_p, tower_phi_p)) return 1;
+	  if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+
+	  if(!rBuilder.SetRho(towerRhoJetByJetOut_p[iI], towerAreaJetByJetOut_p[iI])) return 1;
+	  if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+          if(!rBuilder.SetRho(towerRhoGlobalOut_p[iI], towerAreaGlobalOut_p[iI])) return 1;
+	  if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+          if(!rBuilder.SetRho(towerRhoGlobalIter0Out_p[iI], towerAreaGlobalIter0Out_p[iI])) return 1;
+
+	  if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 	}
 	else{
 	  if(!rBuilder.CalcRhoFromPtEtaPhi(tower_pt_p, tower_eta_p, tower_phi_p, &(jetsToExclude[0]), 1)) return 1;
-	}
+	  if(!rBuilder.SetRho(towerRhoJetByJetOut_p[iI], towerAreaJetByJetOut_p[iI])) return 1;
 
-	if(!rBuilder.SetRho(towerRhoOut_p)) return 1;
-	if(!rBuilder.SetRhoPt(towerPtRhoOut_p)) return 1;
+	  if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+
+	  if(!rBuilder.CalcRhoFromPtEtaPhi(tower_pt_p, tower_eta_p, tower_phi_p, &(jetsToExclude[1]), 1)) return 1;
+          if(!rBuilder.SetRho(towerRhoGlobalOut_p[iI], towerAreaGlobalOut_p[iI])) return 1;
+
+	  if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+
+	  if(!rBuilder.CalcRhoFromPtEtaPhi(tower_pt_p, tower_eta_p, tower_phi_p, &(jetsToExclude[2]), 1)) return 1;
+          if(!rBuilder.SetRho(towerRhoGlobalIter0Out_p[iI], towerAreaGlobalIter0Out_p[iI])) return 1;	  
+
+	  if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+	}
 	
-	
+	if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+
 	for(const auto & jet : tempJets){
 	  realJetConst.clear();
 	  realJetConstClean.clear();
 	  realJetConstDirty.clear();
 	  ghostJetConst.clear();
 	  fastjet::SelectorIsPureGhost().sift(jet.constituents(), ghostJetConst, realJetConst);
+
+	  if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 	  
 	  for(unsigned int rI = 0; rI < realJetConst.size(); ++rI){
 	    if(cBuilder.IsUserIndexGhosted(realJetConst[rI].user_index())) realJetConstDirty.push_back(realJetConst[rI]);
 	    else realJetConstClean.push_back(realJetConst[rI]);
 	  }
+
+	  if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 	  
-	  rescaleGhosts(*towerRhoOut_p, *etaBinsOut_p, &ghostJetConst, 5.0);
 	  globalGhosts.insert(std::end(globalGhosts), std::begin(ghostJetConst), std::end(ghostJetConst));
+	  rescaleGhosts(*(towerRhoJetByJetOut_p[iI]), *etaBinsOut_p, &ghostJetConst, 5.0);
+
+	  if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 	  const Int_t nRealConst = realJetConstClean.size();
 	  if(nRealConst == 0) continue;
 	  
@@ -830,56 +1009,72 @@ int makeClusterTree(std::string inConfigFileName)
 	    
 	    fastjet::contrib::ConstituentSubtractor subtractor;
 	    subtractor.set_distance_type(fastjet::contrib::ConstituentSubtractor::deltaR);
-	    subtractor.set_max_distance(rParam);
+	    subtractor.set_max_distance(csDRJetByJet);
 	    subtractor.set_alpha(alphaParams[aI]);
 	    subtractor.set_remove_all_zero_pt_particles(true);
 	    subtractor.set_max_eta(maxGlobalAbsEta);
 	    subtracted_particles = subtractor.do_subtraction(realJetConstClean, ghostJetConst);
 	    
 	    fastjet::PseudoJet subtracted_jet = join(subtracted_particles);
-	    if(setJet(subtracted_jet, &(jtpt_[algoPos][njt_[algoPos]]), &(jteta_[algoPos][njt_[algoPos]]), &(jtphi_[algoPos][njt_[algoPos]]), &(jtm_[algoPos][njt_[algoPos]]), recoJtMinPt, jtMaxAbsEta)) ++(njt_[algoPos]);
+	    if(setJet(subtracted_jet, &(jtpt_[algoPos][njt_[algoPos]]), &(jteta_[algoPos][njt_[algoPos]]), &(jtphi_[algoPos][njt_[algoPos]]), &(jtm_[algoPos][njt_[algoPos]]), recoJtMinPt, jtMaxAbsEta)){
+	      ++(njt_[algoPos]);
+
+	      if(iI == 0) jetsToExclude[0].push_back(subtracted_jet);
+	    }
 	  }
 	}
+
+	if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 	
-	tempInputs = cBuilder.GetAllInputs(); 
 	for(unsigned int aI = 0; aI < alphaParams.size(); ++aI){
+	  if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 	  fastjet::contrib::ConstituentSubtractor subtractor;
 	  subtractor.set_distance_type(fastjet::contrib::ConstituentSubtractor::deltaR);
-	  subtractor.set_max_distance(rParam);
+	  subtractor.set_max_distance(csDRGlobal);
 	  subtractor.set_alpha(alphaParams[aI]);
 	  subtractor.set_max_eta(maxGlobalAbsEta);
 	  subtractor.set_remove_all_zero_pt_particles(true);
 	  //	subtractor.set_keep_original_masses();
+          rescaleGhosts(*(towerRhoGlobalOut_p[iI]), *etaBinsOut_p, &globalGhosts, 5.0);
+	  tempInputs = cBuilder.GetAllInputs(); 
 	  subtracted_particles = subtractor.do_subtraction(tempInputs, globalGhosts, &globalGhostsIter);
+
+	  if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 	  
 	  fastjet::ClusterSequence cs(subtracted_particles, jet_def);
 	  tempJets = fastjet::sorted_by_pt(cs.inclusive_jets(recoJtMinPt));
-	  algo = towerStr + "CSGlobalAlpha" + std::to_string(alphaParams[aI]);
+	  algo = towerStr + "CSGlobalAlpha" + std::to_string(alphaParams[aI]) + "IterRho" + std::to_string(iI);
+
+	  if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+
 	  if(!vectContainsStr(algo, &jtAlgos)) return 1;
 	  algoPos = algoToPosMap[algo];
 	 
+
+	  if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 	  if(iI == 0){
-	    for(unsigned int tI = 0; tI < tempJets.size(); ++tI){
-	      jetsToExclude[0].push_back(tempJets[tI]);
-	    }
+	    jetsToExclude[1] = tempJets;
 	  }
 
 	  fillArrays(&tempJets, &njt_[algoPos], jtpt_[algoPos], jteta_[algoPos], jtphi_[algoPos], jtm_[algoPos], recoJtMinPt, jtMaxAbsEta);      	
 
-	  
-	  for(unsigned int eI = 0; eI < towerRhoIterOut_p->size(); ++eI){
-	    towerRhoIterOut_p->at(eI) = 0.0;
-	  }
-	  
-	  if(iI == 0){
-	    if(!rBuilder.CalcRhoFromPseudoJet(&globalGhostsIter)) return 1;
-	  }
-	  else{
-	    if(!rBuilder.CalcRhoFromPseudoJet(&globalGhostsIter, &(jetsToExclude[1]), 1)) return 1;
-	  }
-	  if(!rBuilder.SetRho(towerRhoIterOut_p)) return 1;
-      	  
-	  rescaleGhosts(*towerRhoIterOut_p, *etaBinsOut_p, &globalGhosts, 5.0);
+	  rescaleGhosts(*(towerRhoGlobalIter0Out_p[iI]), *etaBinsOut_p, &globalGhosts, 2.5);
+          tempInputs = cBuilder.GetAllInputs();
+	  subtractor.set_max_distance(csDRGlobalIter0);
+          subtracted_particles = subtractor.do_subtraction(tempInputs, globalGhosts, &globalGhostsIter);
+
+
+	if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+	  if(!rBuilder.CalcRhoFromPseudoJet(&globalGhostsIter)) return 1;
+
+	if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+	  if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+	  if(!rBuilder.SetRho(towerRhoGlobalIter1Out_p[iI], towerAreaGlobalIter1Out_p[iI])) return 1;
+
+	if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+	  rescaleGhosts(*(towerRhoGlobalIter1Out_p[iI]), *etaBinsOut_p, &globalGhosts, 2.5);
+
+	  subtractor.set_max_distance(csDRGlobalIter1);
 	  subtracted_particles = subtractor.do_subtraction(subtracted_particles, globalGhosts);
 	  fastjet::ClusterSequence csIter(subtracted_particles, jet_def);
 	  tempJets = fastjet::sorted_by_pt(csIter.inclusive_jets(recoJtMinPt));
@@ -888,15 +1083,19 @@ int makeClusterTree(std::string inConfigFileName)
 	  algoPos = algoToPosMap[algo];
 	  
 	  if(iI == 0){
-	    for(unsigned int tI = 0; tI < tempJets.size(); ++tI){
-	      jetsToExclude[1].push_back(tempJets[tI]);
-	    }
+	    jetsToExclude[2] = tempJets;
 	  }
 
 	  fillArrays(&tempJets, &njt_[algoPos], jtpt_[algoPos], jteta_[algoPos], jtphi_[algoPos], jtm_[algoPos], recoJtMinPt, jtMaxAbsEta);      		
 	}     
+
+	if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
       } 
+
+      if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
     }
+
+    if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 
     if(isMC){
       for(Int_t aI = 0; aI < nJtAlgo; ++aI){
@@ -952,7 +1151,7 @@ int makeClusterTree(std::string inConfigFileName)
 	}	
       }
     }
-       
+         
     outTree_p->Fill();
     subMainLoop[subMainLoopPos].stop();
   }
@@ -963,24 +1162,29 @@ int makeClusterTree(std::string inConfigFileName)
   if(doGlobalDebug) std::cout << "DEBUG FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 
   etaBinsOut_p->clear();
-  trkRhoOut_p->clear();
-  trkRhoCorrOut_p->clear();
-  trkRhoOut_p->clear();
-  trkRhoCorrOut_p->clear();
-  towerRhoOut_p->clear();
-  towerRhoCorrOut_p->clear();
-  towerRhoOut_p->clear();
-  towerRhoCorrOut_p->clear();
-
   delete etaBinsOut_p;
-  delete trkRhoOut_p;
-  delete trkRhoCorrOut_p;
-  delete trkPtRhoOut_p;
-  delete trkPtRhoCorrOut_p;
-  delete towerRhoOut_p;
-  delete towerRhoCorrOut_p;
-  delete towerPtRhoOut_p;
-  delete towerPtRhoCorrOut_p;
+
+  for(int iI = 0; iI < nIterRho; ++iI){
+    trkRhoJetByJetOut_p[iI]->clear();
+    trkRhoGlobalOut_p[iI]->clear();
+    trkRhoGlobalIter0Out_p[iI]->clear();
+    trkRhoGlobalIter1Out_p[iI]->clear();
+  
+    towerRhoJetByJetOut_p[iI]->clear();
+    towerRhoGlobalOut_p[iI]->clear();
+    towerRhoGlobalIter0Out_p[iI]->clear();
+    towerRhoGlobalIter1Out_p[iI]->clear();
+
+    delete trkRhoJetByJetOut_p[iI];
+    delete trkRhoGlobalOut_p[iI];
+    delete trkRhoGlobalIter0Out_p[iI];
+    delete trkRhoGlobalIter1Out_p[iI];
+  
+    delete towerRhoJetByJetOut_p[iI];
+    delete towerRhoGlobalOut_p[iI];
+    delete towerRhoGlobalIter0Out_p[iI];
+    delete towerRhoGlobalIter1Out_p[iI];
+  }
 
   cBuilder.Clean();
   rBuilder.Clean();  
@@ -989,6 +1193,8 @@ int makeClusterTree(std::string inConfigFileName)
   delete inFile_p;
 
   outFile_p->cd();
+
+ 
 
   outTree_p->Write("", TObject::kOverwrite);
   delete outTree_p;

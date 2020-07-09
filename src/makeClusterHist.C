@@ -170,11 +170,13 @@ int makeClusterHist(std::string inConfigFileName)
   std::string outFileName = inFileName.substr(0, inFileName.find(".root"));
   while(outFileName.find("/") != std::string::npos){outFileName.replace(0, outFileName.find("/")+1, "");}
   outFileName = "output/" + dateStr + "/" + outFileName + "_HIST_" + dateStr + ".root";
-  
+
+  //Re-worked binning - don't want to go above 90 because of lack of stats  
+  const Int_t nMaxCentBins = 10;
   const Int_t nCentBins = 7;
-  const Int_t centBinsLow[nCentBins] = {0, 10, 20, 30, 40, 60, 80};
-  const Int_t centBinsHigh[nCentBins] = {10, 20, 30, 40, 60, 80, 100};
-  Int_t nEventPerCent[nCentBins];
+  const Int_t centBinsLow[nMaxCentBins] = {0, 10, 20, 30, 40, 50, 70};
+  const Int_t centBinsHigh[nMaxCentBins] = {10, 20, 30, 40, 50, 70, 90};
+  Int_t nEventPerCent[nMaxCentBins];
   std::vector<std::string> centBinsStr;
   for(Int_t cI = 0; cI < nCentBins; ++cI){
     centBinsStr.push_back("Cent" + std::to_string(centBinsLow[cI]) + "to" + std::to_string(centBinsHigh[cI]));
@@ -200,16 +202,16 @@ int makeClusterHist(std::string inConfigFileName)
   TH1D* cent_Unweighted_p = new TH1D("cent_Unweighted_h", ";Centrality (%);Unweighted Counts", 100, -0.5, 99.5);
   centerTitles({cent_p, cent_CentWeightOnly_p, cent_Unweighted_p});
 
-  TH1D* spectra_p[nMaxJtAlgo+1][nCentBins];
-  TH1D* spectraUnmatched_p[nMaxJtAlgo][nCentBins];
-  TH1D* spectraChg_p[nCentBins];
-  TH1D* matchedTruthSpectra_p[nMaxJtAlgo][nCentBins];
-  TH1D* spectra_Unweighted_p[nCentBins];
-  TH1D* recoOverGen_VPt_p[nMaxJtAlgo][nCentBins][nJtPtBins];
-  TH1D* recoOverGenM_VPt_p[nMaxJtAlgo][nCentBins][nJtPtBins];
-  TH1D* recoOverGenMOverPt_VPt_p[nMaxJtAlgo][nCentBins][nJtPtBins];
-  TH1D* recoGen_DeltaEta_p[nMaxJtAlgo][nCentBins][nJtPtBins];
-  TH1D* recoGen_DeltaPhi_p[nMaxJtAlgo][nCentBins][nJtPtBins];
+  TH1D* spectra_p[nMaxJtAlgo+1][nMaxCentBins];
+  TH1D* spectraUnmatched_p[nMaxJtAlgo][nMaxCentBins];
+  TH1D* spectraChg_p[nMaxCentBins];
+  TH1D* matchedTruthSpectra_p[nMaxJtAlgo][nMaxCentBins];
+  TH1D* spectra_Unweighted_p[nMaxCentBins];
+  TH1D* recoOverGen_VPt_p[nMaxJtAlgo][nMaxCentBins][nJtPtBins];
+  TH1D* recoOverGenM_VPt_p[nMaxJtAlgo][nMaxCentBins][nJtPtBins];
+  TH1D* recoOverGenMOverPt_VPt_p[nMaxJtAlgo][nMaxCentBins][nJtPtBins];
+  TH1D* recoGen_DeltaEta_p[nMaxJtAlgo][nMaxCentBins][nJtPtBins];
+  TH1D* recoGen_DeltaPhi_p[nMaxJtAlgo][nMaxCentBins][nJtPtBins];
   
   for(Int_t jI = 0; jI < nJtAlgo+1; ++jI){
     std::string algo = "Truth";
@@ -239,7 +241,7 @@ int makeClusterHist(std::string inConfigFileName)
 	for(Int_t jI2 = 0; jI2 < nJtPtBins; ++jI2){
 	  std::string ptStr = "JtPt" + prettyString(jtPtBins[jI2], 1, true) + "to" + prettyString(jtPtBins[jI2+1], 1, true);
 	  jtPtBinsStrVect.push_back(ptStr);
-	  recoOverGen_VPt_p[jI][cI][jI2] = new TH1D(("recoOverGen_VPt_" + nameStr + "_" + ptStr + "_h").c_str(), ";Reco./Gen.;Counts", 21, 0.0, 2.0);
+	  recoOverGen_VPt_p[jI][cI][jI2] = new TH1D(("recoOverGen_VPt_" + nameStr + "_" + ptStr + "_h").c_str(), ";Reco./Gen.;Counts", 51, 0.0, 2.0);
 	  recoOverGenM_VPt_p[jI][cI][jI2] = new TH1D(("recoOverGenM_VPt_" + nameStr + "_" + ptStr + "_h").c_str(), ";Reco. Mass/Gen. Mass;Counts", 21, 0.0, 2.0);
 	  recoOverGenMOverPt_VPt_p[jI][cI][jI2] = new TH1D(("recoOverGenMOverPt_VPt_" + nameStr + "_" + ptStr + "_h").c_str(), ";(Reco. M/p_{T})/(Gen. M/p_{T});Counts", 21, 0.0, 2.0);
 	  recoGen_DeltaEta_p[jI][cI][jI2] = new TH1D(("recoGen_DeltaEta_" + nameStr + "_" + ptStr + "_h").c_str(), ";#eta_{Reco.} - #eta_{Gen.};Counts", 21, -0.3, 0.3);
@@ -360,12 +362,22 @@ int makeClusterHist(std::string inConfigFileName)
 
   const Int_t nDiv = TMath::Max(1, nEntries/50);
 
+  /*
+  std::vector<int> entries;
+  std::vector<double> weights;
+  std::vector<double> jzWeights;
+  std::vector<double> centWeights;
+  std::vector<double> cents;
+  */
+  
   std::cout << "Processing " << nEntries << " events..." << std::endl;
   for(Int_t entry = 0; entry < nEntries; ++entry){
     if(entry%nDiv == 0) std::cout << " Entry " << entry << "/" << nEntries << "..." << std::endl;
     csTree_p->GetEntry(entry);
 
-  if(doDebug) std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+    if(doDebug) std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+
+    if(cent_ > 98.1) continue;
 
     Int_t centPos = -1;
     for(Int_t cI = 0; cI < nCentBins; ++cI){
@@ -376,7 +388,7 @@ int makeClusterHist(std::string inConfigFileName)
     }
     if(centPos < 0) continue;
 
-  if(doDebug) std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+    if(doDebug) std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 
     Double_t weight = 1.0;
     Double_t centWeight = 1.0;
@@ -391,7 +403,7 @@ int makeClusterHist(std::string inConfigFileName)
 	}
       }
 
-  if(doDebug) std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+      if(doDebug) std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 
       if(xsecPos < 0){
 	std::cout << "Couldnt find weight for x-sec/filter eff: " << xSectionNB_ << "/" << filterEff_ << std::endl;
@@ -399,11 +411,14 @@ int makeClusterHist(std::string inConfigFileName)
       }
       weight *= jzWeightMap[xsecPos];
     }
+
     if(doCentWeights){
       int centInt_ = (int)cent_;
       centWeight = centWeightMap[centInt_]/centCounter[centInt_];
       weight *= centWeight;
     }
+
+    if(entry == 804801) std::cout << "JZ WEIGHT, CENT WEIGHT: " << weight/centWeight << ", " << centWeight << std::endl;
 
     cent_p->Fill(cent_, weight);
     cent_CentWeightOnly_p->Fill(cent_, centWeight);
@@ -470,7 +485,22 @@ int makeClusterHist(std::string inConfigFileName)
 
 	    recoGen_DeltaEta_p[aI][centPos][jtPos]->Fill(jteta_[aI][pos] - jtetaTruth_[jI], weight);
 	    recoGen_DeltaPhi_p[aI][centPos][jtPos]->Fill(getDPHI(jtphi_[aI][pos], jtphiTruth_[jI]), weight);
-	    
+
+	    /*
+	    if(cent_ >= 80 && jtAlgos[aI].find("TowerCSGlobalAlpha1IterRho0") != std::string::npos){
+	      if(jtptTruth_[jI] >= 33.0 && jtptTruth_[jI] < 42.3){
+		if(jtpt_[aI][pos]/jtptTruth_[jI] > 0.35 && jtpt_[aI][pos]/jtptTruth_[jI] < 0.46){	
+		  //		if(jtpt_[aI][pos]/jtptTruth_[jI] > 0.46 && jtpt_[aI][pos]/jtptTruth_[jI] < 0.57){
+	  
+		  weights.push_back(weight);
+		  jzWeights.push_back(weight/centWeight);
+		  centWeights.push_back(centWeight);
+		  cents.push_back(cent_);
+		  entries.push_back(entry);
+		}
+	      }
+	    }
+	    */
 	  }
 	}
       }
@@ -522,7 +552,14 @@ int makeClusterHist(std::string inConfigFileName)
   }
 
   if(doDebug) std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
-  
+
+  /*
+  std::cout << "FINAL FILLS: " << std::endl;
+  for(unsigned int eI = 0; eI < entries.size(); ++eI){
+    std::cout << " " << eI << ": " << entries[eI] << ", " << weights[eI] << ", " << jzWeights[eI] << ", " << centWeights[eI] << ", " << cents[eI] << std::endl;
+  }
+  */
+
   inFile_p->Close();
   delete inFile_p;
 
