@@ -42,6 +42,7 @@ else
     else
 	echo "DOWNLOAD FAILED, exit 1."
 	rm -f *.root
+	rm -f *.part
 	exit 1
     fi
 fi

@@ -1,4 +1,4 @@
-cCXX = g++
+CXX = g++
 #O3 for max optimization (go to 0 for debug)
 CXXFLAGS = -Wall -Werror -O3 -Wextra -Wno-unused-local-typedefs -Wno-deprecated-declarations -std=c++11 -g
 ifeq "$(GCCVERSION)" "1"

@@ -16,6 +16,7 @@
 #include "TLatex.h"
 #include "TLegend.h"
 #include "TLine.h"
+#include "TPad.h"
 #include "TStyle.h"
 
 //Local
@@ -112,11 +113,15 @@ void configHist(TGraph* inHist_p, Int_t pos, bool doDebug=false)
   return;
 }
 
-void plotResponseSet(TEnv* fileConfig_p, TEnv* inConfig_p, std::vector<TH1*> histSet, std::vector<std::string> setLabels, std::string globalNameStr, std::string globalLabelStr, std::string dateStr)
+void plotResponseSet(TEnv* fileConfig_p, TEnv* inConfig_p, std::vector<TH1*> histSet, std::vector<std::string> setLabels, std::string globalNameStr, std::string globalLabelStr, std::string dateStr, const std::string refHist = "")
 {
   const int globalFont = 42;
   const double globalSize = 0.035;
-
+  bool doRatio = false;
+  if(refHist.size() != 0){
+    doRatio = true;
+  }
+  
   std::string frontStr = "";
   if(globalNameStr.find("recoGenSigma_DeltaEta") != std::string::npos) frontStr = "DELTAETASIGMA";
   else if(globalNameStr.find("recoGenSigma_DeltaPhi") != std::string::npos) frontStr = "DELTAPHISIGMA";
@@ -158,10 +163,48 @@ void plotResponseSet(TEnv* fileConfig_p, TEnv* inConfig_p, std::vector<TH1*> his
   std::string caloTrackStr = fileConfig_p->GetValue("CALOTRACKSTR", "");
 
   TCanvas* canv_p = new TCanvas("canv_p", "", 450, 450);
-  canv_p->SetTopMargin(0.01);
-  canv_p->SetRightMargin(0.01);
-  canv_p->SetLeftMargin(0.16);
-  canv_p->SetBottomMargin(0.14);
+  canv_p->SetTopMargin(0.001);
+  canv_p->SetRightMargin(0.001);
+  canv_p->SetLeftMargin(0.001);
+  canv_p->SetBottomMargin(0.001);
+
+  const Double_t leftMargin = 0.15;
+  const Double_t padSplit = 0.35;
+  TPad* pad1_p = nullptr;
+  TPad* pad2_p = nullptr;
+
+  if(doRatio){
+    canv_p->cd();
+    pad1_p = new TPad("pad2", "", 0.0, padSplit, 1., 1.0);
+    pad1_p->SetTopMargin(0.01);
+    pad1_p->SetRightMargin(0.01);
+    pad1_p->SetLeftMargin(leftMargin);
+    pad1_p->SetBottomMargin(0.001);
+
+    pad1_p->Draw("SAME");
+
+    canv_p->cd();
+    pad2_p = new TPad("pad2", "", 0.0, padSplit, 1., 1.0);
+    pad2_p->SetTopMargin(0.001);
+    pad2_p->SetRightMargin(0.01);
+    pad2_p->SetLeftMargin(leftMargin);
+    pad2_p->SetBottomMargin(leftMargin/padSplit);
+    
+    pad2_p->cd();
+  }
+  else{
+    pad1_p = new TPad("pad1", "", 0.0, 0.0, 1., 1.0);
+    pad1_p->SetTopMargin(0.01);
+    pad1_p->SetRightMargin(0.01);
+    pad1_p->SetLeftMargin(leftMargin);
+    pad1_p->SetBottomMargin(leftMargin);
+
+    canv_p->cd();
+    pad1_p->Draw("SAME");
+  }
+  
+  canv_p->cd();
+  pad1_p->cd();
 
   TLatex* label_p = new TLatex();
   label_p->SetNDC();
@@ -278,9 +321,8 @@ void plotResponseSet(TEnv* fileConfig_p, TEnv* inConfig_p, std::vector<TH1*> his
     
     label_p->DrawLatex(labelX, labelY - 0.045*lI, labels[lI].c_str());
   }
-
   
-  if(doLogX) gPad->SetLogy();
+  if(doLogX) gPad->SetLogx();
     
   for(Int_t eI = 0; eI < 20; ++eI){
     std::string tempStr = inConfig_p->GetValue((frontStr + "WHITEBOX." + std::to_string(eI)).c_str(), "");
@@ -289,10 +331,26 @@ void plotResponseSet(TEnv* fileConfig_p, TEnv* inConfig_p, std::vector<TH1*> his
     std::vector<float> pos = strToVectF(tempStr);
     if(pos.size() == 4) drawWhiteBoxNDC(canv_p, pos[0], pos[1], pos[2], pos[3]);
   }
-  
+
+  /*  
+  if(doRatio){
+    canv_p->cd();
+    pad2_p->cd();
+
+    std::string histName = histSet[0]->GetName();
+    bool isSigma = histName.find("Sigma") != std::string::npos;
+    
+    
+
+  }
+  */
+
   std::string saveName = "pdfDir/" + dateStr + "/" + globalNameStr + "_" + globalLabelStr + "_" + dateStr + ".pdf";
   quietSaveAs(canv_p, saveName);
+  delete pad1_p;
+  if(doRatio) delete pad2_p;
   delete canv_p;
+
   delete leg_p;
   delete label_p;
   
@@ -466,9 +524,13 @@ int plotClusterHist(std::string inConfigFileName)
   }
 
   if(doDebug) std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+  TH1D* cent_p = (TH1D*)inFile_p->Get("cent_h");
+  TH1D* cent_FullUnweighted_p = nullptr;
+  if(isMC) cent_FullUnweighted_p = (TH1D*)inFile_p->Get("cent_FullUnweighted_h");
   TH1D* spectra_p[nMaxJtAlgo][nMaxCentBins];
   TH1D* spectraUnmatched_p[nMaxJtAlgo][nMaxCentBins];
   TH1D* spectraTruth_p[nMaxCentBins];
+  TH1D* spectraTruth_Unweighted_p[nMaxCentBins];
   TH1D* spectraChgTruth_p[nMaxCentBins];
 
   TH1D* recoOverGen_VPt_p[nMaxJtAlgo][nMaxCentBins][nMaxJtPtBins];
@@ -497,6 +559,7 @@ int plotClusterHist(std::string inConfigFileName)
       if(isMC){
 	if(aI == 0){
 	  spectraTruth_p[cI] = (TH1D*)inFile_p->Get(("spectra_Truth_" + centBinsStr[cI] + "_h").c_str());
+	  spectraTruth_Unweighted_p[cI] = (TH1D*)inFile_p->Get(("spectra_Unweighted_Truth_" + centBinsStr[cI] + "_h").c_str());
 	  spectraChgTruth_p[cI] = (TH1D*)inFile_p->Get(("spectraChg_Truth_" + centBinsStr[cI] + "_h").c_str());
 	}
 
@@ -642,9 +705,101 @@ int plotClusterHist(std::string inConfigFileName)
     quietSaveAs(canv_p, saveName + ".pdf");
     quietSaveAs(canv_p, saveName + ".png");
 
+    if(doDebug) std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+
     delete leg_p;
     delete canv_p;
   }
+
+
+  if(doDebug) std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+
+  if(isMC){
+    std::vector<TH1D*> quickPlots = {cent_p, cent_FullUnweighted_p, spectraTruth_p[0], spectraTruth_Unweighted_p[0]};
+
+    for(unsigned int i = 0; i < quickPlots.size(); ++i){
+      std::string saveName = quickPlots[i]->GetName();
+
+      TLatex* label_p = new TLatex();
+      label_p->SetNDC();
+      label_p->SetTextFont(globalFont);
+      label_p->SetTextSize(globalSize);
+      
+      double maxLabelStr = 0.0;
+      
+      const double labelX = 0.21;
+      const double labelY = 0.45;
+      const bool labelAlignRight = 0;
+      
+      if(labelAlignRight){
+	for(unsigned int lI = 0; lI < globalLabels.size(); ++lI){
+	  label_p->SetText(labelX, labelY, globalLabels[lI].c_str());
+	  if(label_p->GetXsize() > maxLabelStr) maxLabelStr = label_p->GetXsize();
+	}
+      }
+      
+      TCanvas* canv_p = new TCanvas("canv_p", "", 450, 450);
+      
+      canv_p->SetTopMargin(0.01);
+      canv_p->SetRightMargin(0.01);
+      canv_p->SetLeftMargin(0.16);
+      canv_p->SetBottomMargin(0.14);
+      
+      Double_t globalMin = 1000000;    
+      Double_t globalMax = -1;
+    
+      for(Int_t aI = 0; aI < nJtAlgo; ++aI){
+	globalMin = TMath::Min(globalMin, getMinGTZero(quickPlots[i]));
+	globalMax = TMath::Max(globalMax, getMax(quickPlots[i]));
+      }
+      
+      quickPlots[i]->SetMaximum(3.*globalMax);
+      quickPlots[i]->SetMinimum(globalMin/2.);
+
+      std::string prevY = quickPlots[i]->GetYaxis()->GetTitle();
+      if(saveName.find("Unweighted") != std::string::npos) quickPlots[i]->GetYaxis()->SetTitle("Unweighted Counts");
+      else quickPlots[i]->GetYaxis()->SetTitle("Weighted Counts");
+
+      quickPlots[i]->DrawCopy("HIST E1 P");
+
+      quickPlots[i]->GetYaxis()->SetTitle(prevY.c_str());
+      
+      gPad->SetLogy();
+      gStyle->SetOptStat(0);
+      
+      
+      for(unsigned int lI = 0; lI < globalLabels.size(); ++lI){
+	if(labelAlignRight){
+	  label_p->SetText(labelX, labelY, globalLabels[lI].c_str());
+	  while(label_p->GetXsize() < maxLabelStr){
+	    globalLabels[lI] = " " + globalLabels[lI];
+	    label_p->SetText(labelX, labelY, globalLabels[lI].c_str());
+	  }
+	}
+	
+	label_p->DrawLatex(labelX, labelY - 0.045*lI, globalLabels[lI].c_str());
+      }
+      
+      if(saveName.find("Unweighted") != std::string::npos){
+	label_p->DrawLatex(labelX, labelY - 0.045*globalLabels.size(), "Unweighted");
+      }
+      else{
+	label_p->DrawLatex(labelX, labelY - 0.045*globalLabels.size(), "Weighted");
+      }
+      
+      if(doDebug) std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+      if(doDebug) std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+      
+       saveName = "pdfDir/" + dateStr + "/" + saveName + "_" + globalStr2 + "_" + caloTrackStr + "_" + dateStr;
+      quietSaveAs(canv_p, saveName + ".pdf");
+      quietSaveAs(canv_p, saveName + ".png");
+      
+      delete canv_p;
+    }
+  }
+
+    if(doDebug) std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+
 
   if(isMC){
     if(doDebug) std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
@@ -1010,6 +1165,9 @@ int plotClusterHist(std::string inConfigFileName)
     else if(nJtPtBins == 9){nX = 3; nY = 3;} 
     else if(nJtPtBins == 10 || nJtPtBins == 11 || nJtPtBins == 12 ){nX = 4; nY = 3;} 
     else if(nJtPtBins == 13 || nJtPtBins == 14 || nJtPtBins == 15 ){nX = 5; nY = 3;} 
+    else if(nJtPtBins == 16){nX = 4; nY = 4;} 
+    else if(nJtPtBins == 17 || nJtPtBins == 18 || nJtPtBins == 19 || nJtPtBins == 20){nX = 5; nY = 4;} 
+    else if(nJtPtBins == 21 || nJtPtBins == 22 || nJtPtBins == 23 || nJtPtBins == 24 || nJtPtBins == 25){nX = 5; nY = 5;} 
  
   if(doDebug) std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
       std::vector<TH1*> centHistMean, centHistSigma, centHistSigmaOverMean, centHistMMean, centHistMSigma, centHistMOverPtMean, centHistMOverPtSigma, centHistSigmaEta, centHistSigmaPhi;
@@ -1055,6 +1213,43 @@ int plotClusterHist(std::string inConfigFileName)
 	canvFit_p->SetRightMargin(0.01);
  	
 	canvFit_p->Divide(nX, nY);
+
+	//Prelabel shit:
+	label_p->SetTextSize(0.05);
+	double maxSize = -1.0;	
+	std::string centLabel = centBinsStr[cI].substr(4, centBinsStr[cI].size()) + "%";
+	centLabel.replace(centLabel.find("to"), 2, "-");
+	centLabel = "#bf{#color[" + std::to_string(kRed) + "]{" + centLabel + "}}";
+
+	if(globalStr.size() != 0) centLabel = centLabel + "; #bf{" + globalStr + "}";
+	std::string tempStr = jtAlgos[jI];
+	if(algoNameSwaps.count(tempStr) != 0) tempStr = algoNameSwaps[jtAlgos[jI]];
+	centLabel = tempStr + ", " + centLabel;
+
+	std::vector<std::string> preLabels = {centLabel, ("|#eta_{jet}| < " + jtAbsEtaMaxStr), ("|#eta_{jet}| < " + jtAbsEtaMaxStr)};
+	for(unsigned int mI = 0; mI < preLabels.size(); ++mI){
+	  label_p->SetText(0.1, 0.1, preLabels[mI].c_str());
+	  double currSize = label_p->GetXsize();
+	  if(currSize > maxSize) maxSize = currSize;
+	}
+
+	if(isStrSame(caloTrackStr, "Tower")){
+	  label_p->SetText(0.50, 0.88, "Calo. jets");
+	  double currSize = label_p->GetXsize();
+          if(currSize > maxSize) maxSize = currSize;
+	}
+	else if(isStrSame(caloTrackStr, "Trk")){
+	  label_p->SetText(0.50, 0.88, "Track jets");
+          double currSize = label_p->GetXsize();
+          if(currSize > maxSize) maxSize = currSize;
+	}
+
+	for(Int_t jI2 = 0; jI2 < nJtPtBins; ++jI2){
+	  std::string ptStr = prettyString(jtPtBins[jI2], 1, false) + "<p_{T,Jet}<" + prettyString(jtPtBins[jI2+1], 1, false);
+	  label_p->SetText(0.50, 0.81, ptStr.c_str());
+	}
+	label_p->SetTextSize(globalSize);	
+
 	
 	for(Int_t jI2 = 0; jI2 < nJtPtBins; ++jI2){
 	//std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
@@ -1074,10 +1269,10 @@ int plotClusterHist(std::string inConfigFileName)
 	    Double_t minVal = 0.0;
 	    Double_t maxVal = 2.0;
 	    
-	    Int_t minBin = TMath::Max(1, recoOverGen_VPt_p[jI][cI][jI2]->FindBin(minJtPt/jtPtBins[jI2]));
+	    Int_t minBin = TMath::Max(1, recoOverGen_VPt_p[jI][cI][jI2]->FindBin(minJtPt/jtPtBins[jI2])+1);
 	    Int_t maxBin = recoOverGen_VPt_p[jI][cI][jI2]->GetNbinsX()+1;
 	    
-	    while(integral < 0.95){       
+	    while(integral < 0.88){//corresponds to 1.5sigma
 	      Int_t lowBin = TMath::Max(minBin, binPos - iter);
 	      Int_t highBin = TMath::Min(maxBin, binPos + iter);
 	      
@@ -1101,7 +1296,7 @@ int plotClusterHist(std::string inConfigFileName)
 	  Double_t sigma = recoOverGen_VPt_p[jI][cI][jI2]->GetStdDev();
 	  Double_t sigmaErr = recoOverGen_VPt_p[jI][cI][jI2]->GetStdDevError();
 
-	  Double_t relErr = TMath::Sqrt(meanErr/mean + sigmaErr/sigma);
+	  Double_t relErr = TMath::Sqrt(meanErr*meanErr/(mean*mean) + sigmaErr*sigmaErr/(sigma*sigma));
 	  Double_t sigmaOverMean = sigma/mean;
 	  Double_t sigmaOverMeanErr = sigmaOverMean*relErr;
 
@@ -1114,7 +1309,7 @@ int plotClusterHist(std::string inConfigFileName)
 	    sigma = recoOverGenFit_p[jI][cI][jI2]->GetParameter(2);
 	    sigmaErr = recoOverGenFit_p[jI][cI][jI2]->GetParError(2);
 	    
-	    relErr = TMath::Sqrt(meanErr/mean + sigmaErr/sigma);
+	    relErr = TMath::Sqrt(meanErr*meanErr/(mean*mean) + sigmaErr*sigmaErr/(sigma*sigma));
 	    sigmaOverMean = sigma/mean;
 	    sigmaOverMeanErr = sigmaOverMean*relErr;
 	  }
@@ -1167,28 +1362,63 @@ int plotClusterHist(std::string inConfigFileName)
 	  //	  recoOverGen_VPt_p[jI][cI][jI2]->GetYaxis()->SetTitleSize(20);
 
 	  if(doDebug) std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
+
+	  recoOverGen_VPt_p[jI][cI][jI2]->GetXaxis()->SetTitleSize(recoOverGen_VPt_p[jI][cI][jI2]->GetXaxis()->GetTitleSize()*1.4);
+	  recoOverGen_VPt_p[jI][cI][jI2]->GetYaxis()->SetTitleSize(recoOverGen_VPt_p[jI][cI][jI2]->GetYaxis()->GetTitleSize()*1.4);
+	  recoOverGen_VPt_p[jI][cI][jI2]->GetXaxis()->SetLabelSize(recoOverGen_VPt_p[jI][cI][jI2]->GetXaxis()->GetLabelSize()*1.4);
+	  recoOverGen_VPt_p[jI][cI][jI2]->GetYaxis()->SetLabelSize(recoOverGen_VPt_p[jI][cI][jI2]->GetYaxis()->GetLabelSize()*1.4);
+	  recoOverGen_VPt_p[jI][cI][jI2]->GetXaxis()->SetTitleOffset(1.0);
+	  recoOverGen_VPt_p[jI][cI][jI2]->GetYaxis()->SetTitleOffset(1.5);
+
 	  recoOverGen_VPt_p[jI][cI][jI2]->DrawCopy("HIST E1");
 	  if(isStrSame(caloTrackStr, "Tower")) recoOverGenFit_p[jI][cI][jI2]->DrawCopy("SAME");	  
+		
+
+	  label_p->SetTextSize(0.05);
 	
-	  std::string centLabel = centBinsStr[cI].substr(4, centBinsStr[cI].size()) + "%";
-	  centLabel.replace(centLabel.find("to"), 2, "-");
-	  centLabel = "#bf{#color[" + std::to_string(kRed) + "]{" + centLabel + "}}";
-	  if(globalStr.size() != 0) centLabel = centLabel + "; #bf{" + globalStr + "}";
-	
-	  std::string tempStr = jtAlgos[jI];
-	  if(algoNameSwaps.count(tempStr) != 0) tempStr = algoNameSwaps[jtAlgos[jI]];
-	  centLabel = tempStr + ", " + centLabel;
-	  
-	  label_p->DrawLatex(0.20, 0.95, centLabel.c_str());
+	  std::vector<std::string> tempLabels; 
 	  std::string ptStr = prettyString(jtPtBins[jI2], 1, false) + "<p_{T,Jet}<" + prettyString(jtPtBins[jI2+1], 1, false);
-	  label_p->DrawLatex(0.20, 0.83, ptStr.c_str());
+	  double xValLab = 0.25;
+	  double yValLab = 0.94;
+	  if(jI2 == 0){
+	    tempLabels = {centLabel};
+	    if(isStrSame(caloTrackStr, "Tower")) tempLabels.push_back("Calo. jets");
+            else if(isStrSame(caloTrackStr, "Trk")) tempLabels.push_back("Track jets");
+	    tempLabels.push_back(ptStr);
+	    tempLabels.push_back("|#eta_{jet}| < " + jtAbsEtaMaxStr);
+	    tempLabels.push_back("p_{T,Reco} > " + minJtPtStr);
+	  }
+	  else{
+	    tempLabels = {""};
+	    tempLabels.push_back("");
+	    tempLabels.push_back(ptStr);
+	  }
+
+	  for(unsigned int i = 0; i < tempLabels.size(); ++i){
+	    label_p->SetText(xValLab, yValLab, tempLabels[i].c_str());
+
+	    double currSize = label_p->GetXsize();
+	    while(currSize < maxSize){tempLabels[i] = " " + tempLabels[i]; label_p->SetText(xValLab, yValLab, tempLabels[i].c_str()); currSize = label_p->GetXsize();}
+	    
+	    label_p->DrawLatex(xValLab, yValLab, tempLabels[i].c_str());
+	    yValLab -= 0.065;
+	  }
+
+	  /*      
+	  if(jI2 == 0) label_p->DrawLatex(0.50, 0.95, centLabel.c_str());
+	  label_p->DrawLatex(0.50, 0.81, ptStr.c_str());
 
 	  if(doDebug) std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 	  
-	  if(jtAbsEtaMaxStr.size() != 0) label_p->DrawLatex(0.20, 0.77, ("|#eta_{jet}| < " + jtAbsEtaMaxStr).c_str());
-	  if(minJtPtStr.size() != 0) label_p->DrawLatex(0.20, 0.71, ("p_{T,Reco} > " + minJtPtStr).c_str());
-	  if(isStrSame(caloTrackStr, "Tower")) label_p->DrawLatex(0.20, 0.89, "Calo. jets");
-	  else if(isStrSame(caloTrackStr, "Trk")) label_p->DrawLatex(0.20, 0.89, "Track jets");
+	  if(jI2 == 0){
+	    if(jtAbsEtaMaxStr.size() != 0) label_p->DrawLatex(0.50, 0.74, ("|#eta_{jet}| < " + jtAbsEtaMaxStr).c_str());
+	    if(minJtPtStr.size() != 0) label_p->DrawLatex(0.50, 0.67, ("p_{T,Reco} > " + minJtPtStr).c_str());
+	    if(isStrSame(caloTrackStr, "Tower")) label_p->DrawLatex(0.50, 0.88, "Calo. jets");
+	    else if(isStrSame(caloTrackStr, "Trk")) label_p->DrawLatex(0.50, 0.88, "Track jets");
+	  
+	  }
+	  */
+	  label_p->SetTextSize(globalSize);
 	}
 
 	  if(doDebug) std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
@@ -1253,8 +1483,6 @@ int plotClusterHist(std::string inConfigFileName)
 	
 	canvFit_p->Divide(nX, nY);
 
-	if(doDebug) std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
-
 	for(Int_t jI2 = 0; jI2 < nJtPtBins; ++jI2){
 	  if(doDebug) std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 	  centerTitles(recoGen_DeltaEta_p[jI][cI][jI2]);
@@ -1275,6 +1503,13 @@ int plotClusterHist(std::string inConfigFileName)
 	  //	  recoGen_DeltaEta_p[jI][cI][jI2]->GetXaxis()->SetTitleSize(20);
 	  //	  recoGen_DeltaEta_p[jI][cI][jI2]->GetYaxis()->SetTitleSize(20);
 
+	  recoGen_DeltaEta_p[jI][cI][jI2]->GetXaxis()->SetTitleSize(recoGen_DeltaEta_p[jI][cI][jI2]->GetXaxis()->GetTitleSize()*1.4);
+	  recoGen_DeltaEta_p[jI][cI][jI2]->GetYaxis()->SetTitleSize(recoGen_DeltaEta_p[jI][cI][jI2]->GetYaxis()->GetTitleSize()*1.4);
+	  recoGen_DeltaEta_p[jI][cI][jI2]->GetXaxis()->SetLabelSize(recoGen_DeltaEta_p[jI][cI][jI2]->GetXaxis()->GetLabelSize()*1.4);
+	  recoGen_DeltaEta_p[jI][cI][jI2]->GetYaxis()->SetLabelSize(recoGen_DeltaEta_p[jI][cI][jI2]->GetYaxis()->GetLabelSize()*1.4);
+	  recoGen_DeltaEta_p[jI][cI][jI2]->GetXaxis()->SetTitleOffset(1.0);
+	  recoGen_DeltaEta_p[jI][cI][jI2]->GetYaxis()->SetTitleOffset(1.5);
+
  	  recoGen_DeltaEta_p[jI][cI][jI2]->SetMinimum(getMinGTZero(recoGen_DeltaEta_p[jI][cI][jI2])/2.);
 	  recoGen_DeltaEta_p[jI][cI][jI2]->DrawCopy("HIST E1");
 	  gPad->SetLogy();
@@ -1289,17 +1524,26 @@ int plotClusterHist(std::string inConfigFileName)
 	  std::string tempStr = jtAlgos[jI];
 	  if(algoNameSwaps.count(tempStr) != 0) tempStr = algoNameSwaps[jtAlgos[jI]];
 	  centLabel = tempStr + ", " + centLabel;
-	  
-	  label_p->DrawLatex(0.20, 0.95, centLabel.c_str());
-	  std::string ptStr = prettyString(jtPtBins[jI2], 1, false) + "<p_{T,Jet}<" + prettyString(jtPtBins[jI2+1], 1, false);
-	  label_p->DrawLatex(0.20, 0.83, ptStr.c_str());
-	  
-	  if(jtAbsEtaMaxStr.size() != 0) label_p->DrawLatex(0.20, 0.77, ("|#eta_{jet}| < " + jtAbsEtaMaxStr).c_str());
-	  if(minJtPtStr.size() != 0) label_p->DrawLatex(0.20, 0.71, ("p_{T,Reco} > " + minJtPtStr).c_str());
-	  if(isStrSame(caloTrackStr, "Tower")) label_p->DrawLatex(0.20, 0.89, "Calo. jets");
-	  else if(isStrSame(caloTrackStr, "Trk")) label_p->DrawLatex(0.20, 0.89, "Track jets");
 
-	  label_p->DrawLatex(0.20, 0.65, ("#sigma=" + prettyString(recoGen_DeltaEta_p[jI][cI][jI2]->GetStdDev(), 3, false)).c_str());
+
+	  label_p->SetTextSize(0.05);
+	  
+	  
+	  if(jI2 == 0) label_p->DrawLatex(0.185, 0.95, centLabel.c_str());
+	  std::string ptStr = prettyString(jtPtBins[jI2], 1, false) + "<p_{T,Jet}<" + prettyString(jtPtBins[jI2+1], 1, false);
+	  label_p->DrawLatex(0.185, 0.83, ptStr.c_str());
+
+	  if(jI2 == 0){
+	    if(jtAbsEtaMaxStr.size() != 0) label_p->DrawLatex(0.185, 0.77, ("|#eta_{jet}| < " + jtAbsEtaMaxStr).c_str());
+	    if(minJtPtStr.size() != 0) label_p->DrawLatex(0.185, 0.71, ("p_{T,Reco} > " + minJtPtStr).c_str());
+	    if(isStrSame(caloTrackStr, "Tower")) label_p->DrawLatex(0.185, 0.89, "Calo. jets");
+	    else if(isStrSame(caloTrackStr, "Trk")) label_p->DrawLatex(0.185, 0.89, "Track jets");
+	  }
+
+	  label_p->DrawLatex(0.185, 0.65, ("#sigma=" + prettyString(recoGen_DeltaEta_p[jI][cI][jI2]->GetStdDev(), 3, false)).c_str());
+	  
+	  label_p->SetTextSize(globalSize);
+	
 	}
 
 	if(doDebug) std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
@@ -1339,6 +1583,14 @@ int plotClusterHist(std::string inConfigFileName)
 	  //	  recoGen_DeltaPhi_p[jI][cI][jI2]->GetXaxis()->SetTitleSize(20);
 	  //	  recoGen_DeltaPhi_p[jI][cI][jI2]->GetYaxis()->SetTitleSize(20);
 
+	  recoGen_DeltaPhi_p[jI][cI][jI2]->GetXaxis()->SetTitleSize(recoGen_DeltaPhi_p[jI][cI][jI2]->GetXaxis()->GetTitleSize()*1.4);
+	  recoGen_DeltaPhi_p[jI][cI][jI2]->GetYaxis()->SetTitleSize(recoGen_DeltaPhi_p[jI][cI][jI2]->GetYaxis()->GetTitleSize()*1.4);
+	  recoGen_DeltaPhi_p[jI][cI][jI2]->GetXaxis()->SetLabelSize(recoGen_DeltaPhi_p[jI][cI][jI2]->GetXaxis()->GetLabelSize()*1.4);
+	  recoGen_DeltaPhi_p[jI][cI][jI2]->GetYaxis()->SetLabelSize(recoGen_DeltaPhi_p[jI][cI][jI2]->GetYaxis()->GetLabelSize()*1.4);
+	  recoGen_DeltaPhi_p[jI][cI][jI2]->GetXaxis()->SetTitleOffset(1.0);
+	  recoGen_DeltaPhi_p[jI][cI][jI2]->GetYaxis()->SetTitleOffset(1.5);
+
+
  	  recoGen_DeltaPhi_p[jI][cI][jI2]->SetMinimum(getMinGTZero(recoGen_DeltaPhi_p[jI][cI][jI2])/2.);
 	  recoGen_DeltaPhi_p[jI][cI][jI2]->DrawCopy("HIST E1");
 	
@@ -1353,35 +1605,171 @@ int plotClusterHist(std::string inConfigFileName)
 	  if(algoNameSwaps.count(tempStr) != 0) tempStr = algoNameSwaps[jtAlgos[jI]];
 	  centLabel = tempStr + ", " + centLabel;
 	  
-	  label_p->DrawLatex(0.20, 0.95, centLabel.c_str());
+	  label_p->SetTextSize(0.05);
+	  if(jI2 == 0) label_p->DrawLatex(0.185, 0.95, centLabel.c_str());
 	  std::string ptStr = prettyString(jtPtBins[jI2], 1, false) + "<p_{T,Jet}<" + prettyString(jtPtBins[jI2+1], 1, false);
-	  label_p->DrawLatex(0.20, 0.83, ptStr.c_str());
+	  label_p->DrawLatex(0.185, 0.83, ptStr.c_str());
 	  
-	  if(jtAbsEtaMaxStr.size() != 0) label_p->DrawLatex(0.20, 0.77, ("|#eta_{jet}| < " + jtAbsEtaMaxStr).c_str());
-	  if(minJtPtStr.size() != 0) label_p->DrawLatex(0.20, 0.71, ("p_{T,Reco} > " + minJtPtStr).c_str());
-	  if(isStrSame(caloTrackStr, "Tower")) label_p->DrawLatex(0.20, 0.89, "Calo. jets");
-	  else if(isStrSame(caloTrackStr, "Trk")) label_p->DrawLatex(0.20, 0.89, "Track jets");
-
-	  label_p->DrawLatex(0.20, 0.65, ("#sigma=" + prettyString(recoGen_DeltaPhi_p[jI][cI][jI2]->GetStdDev(), 3, false)).c_str());
+	  if(jI2 == 0){
+	    if(jtAbsEtaMaxStr.size() != 0) label_p->DrawLatex(0.185, 0.77, ("|#eta_{jet}| < " + jtAbsEtaMaxStr).c_str());
+	    if(minJtPtStr.size() != 0) label_p->DrawLatex(0.185, 0.71, ("p_{T,Reco} > " + minJtPtStr).c_str());
+	    if(isStrSame(caloTrackStr, "Tower")) label_p->DrawLatex(0.185, 0.89, "Calo. jets");
+	    else if(isStrSame(caloTrackStr, "Trk")) label_p->DrawLatex(0.185, 0.89, "Track jets");
+	  }
+	  label_p->DrawLatex(0.185, 0.65, ("#sigma=" + prettyString(recoGen_DeltaPhi_p[jI][cI][jI2]->GetStdDev(), 3, false)).c_str());
 	}
 
+	label_p->SetTextSize(globalSize);
 
 	std::string saveName = "pdfDir/" + dateStr + "/recoGen_DeltaPhi_" + nameStr + "_" + dateStr + ".pdf";
 	quietSaveAs(canvFit_p, saveName);
 	delete canvFit_p;
       }
 
-      plotResponseSet(fileConfig_p, inConfig_p, centHistMean, centBinsStr, "recoOverGenMean_" + globalStr + "_" + caloTrackStr, jtAlgos[jI], dateStr);
-      plotResponseSet(fileConfig_p, inConfig_p, centHistSigma, centBinsStr, "recoOverGenSigma_" + globalStr + "_" + caloTrackStr, jtAlgos[jI], dateStr);
-      plotResponseSet(fileConfig_p, inConfig_p, centHistSigmaOverMean, centBinsStr, "recoOverGenSigmaOverMean_" + globalStr + "_" + caloTrackStr, jtAlgos[jI], dateStr);
-      plotResponseSet(fileConfig_p, inConfig_p, centHistMMean, centBinsStr, "recoOverGenMMean_" + globalStr + "_" + caloTrackStr, jtAlgos[jI], dateStr);
-      plotResponseSet(fileConfig_p, inConfig_p, centHistMSigma, centBinsStr, "recoOverGenMSigma_" + globalStr + "_" + caloTrackStr, jtAlgos[jI], dateStr);
 
-      plotResponseSet(fileConfig_p, inConfig_p, centHistMOverPtMean, centBinsStr, "recoOverGenMOverPtMean_" + globalStr + "_" + caloTrackStr, jtAlgos[jI], dateStr);
-      plotResponseSet(fileConfig_p, inConfig_p, centHistMOverPtSigma, centBinsStr, "recoOverGenMOverPtSigma_" + globalStr + "_" + caloTrackStr, jtAlgos[jI], dateStr);
+      for(unsigned int cI = 0; cI < centBinsStr.size(); ++cI){
+	if(jtAlgos[jI].find("NoSub") != std::string::npos && cI != (unsigned int)periphMostBin) continue;
+	std::string nameStr = jtAlgos[jI] + "_" + centBinsStr[cI];
 
-      plotResponseSet(fileConfig_p, inConfig_p, centHistSigmaEta, centBinsStr, "recoGenSigma_DeltaEta_" + globalStr + "_" + caloTrackStr, jtAlgos[jI], dateStr);
-      plotResponseSet(fileConfig_p, inConfig_p, centHistSigmaPhi, centBinsStr, "recoGenSigma_DeltaPhi_" + globalStr + "_" + caloTrackStr, jtAlgos[jI], dateStr);
+	TCanvas* canvFit_p = new TCanvas("canvFit_p", "", 450*nX, 450*nY);
+	canvFit_p->SetTopMargin(0.01);
+	canvFit_p->SetLeftMargin(0.01);
+	canvFit_p->SetBottomMargin(0.01);
+	canvFit_p->SetRightMargin(0.01);
+	
+	canvFit_p->Divide(nX, nY);
+
+	//Prelabel shit:
+	label_p->SetTextSize(0.05);
+	double maxSize = -1.0;	
+	std::string centLabel = centBinsStr[cI].substr(4, centBinsStr[cI].size()) + "%";
+	centLabel.replace(centLabel.find("to"), 2, "-");
+	centLabel = "#bf{#color[" + std::to_string(kRed) + "]{" + centLabel + "}}";
+
+	if(globalStr.size() != 0) centLabel = centLabel + "; #bf{" + globalStr + "}";
+	std::string tempStr = jtAlgos[jI];
+	if(algoNameSwaps.count(tempStr) != 0) tempStr = algoNameSwaps[jtAlgos[jI]];
+	centLabel = tempStr + ", " + centLabel;
+
+	std::vector<std::string> preLabels = {centLabel, ("|#eta_{jet}| < " + jtAbsEtaMaxStr), ("|#eta_{jet}| < " + jtAbsEtaMaxStr)};
+	for(unsigned int mI = 0; mI < preLabels.size(); ++mI){
+	  label_p->SetText(0.1, 0.1, preLabels[mI].c_str());
+	  double currSize = label_p->GetXsize();
+	  if(currSize > maxSize) maxSize = currSize;
+	}
+
+	if(isStrSame(caloTrackStr, "Tower")){
+	  label_p->SetText(0.50, 0.88, "Calo. jets");
+	  double currSize = label_p->GetXsize();
+          if(currSize > maxSize) maxSize = currSize;
+	}
+	else if(isStrSame(caloTrackStr, "Trk")){
+	  label_p->SetText(0.50, 0.88, "Track jets");
+          double currSize = label_p->GetXsize();
+          if(currSize > maxSize) maxSize = currSize;
+	}
+
+	for(Int_t jI2 = 0; jI2 < nJtPtBins; ++jI2){
+	  std::string ptStr = prettyString(jtPtBins[jI2], 1, false) + "<p_{T,Jet}<" + prettyString(jtPtBins[jI2+1], 1, false);
+	  label_p->SetText(0.50, 0.81, ptStr.c_str());
+	}
+	label_p->SetTextSize(globalSize);	
+
+	for(Int_t jI2 = 0; jI2 < nJtPtBins; ++jI2){
+	  centerTitles(recoOverGenM_VPt_p[jI][cI][jI2]);
+	  
+	  canvFit_p->cd();
+	  canvFit_p->cd(jI2+1);
+
+	  gPad->SetRightMargin(0.01);
+	  gPad->SetTopMargin(0.01);
+	  gPad->SetLeftMargin(0.14);
+	  gPad->SetBottomMargin(0.12);
+	  
+	  recoOverGenM_VPt_p[jI][cI][jI2]->GetXaxis()->SetTitleSize(recoOverGenM_VPt_p[jI][cI][jI2]->GetXaxis()->GetTitleSize()*1.4);
+	  recoOverGenM_VPt_p[jI][cI][jI2]->GetYaxis()->SetTitleSize(recoOverGenM_VPt_p[jI][cI][jI2]->GetYaxis()->GetTitleSize()*1.4);
+	  recoOverGenM_VPt_p[jI][cI][jI2]->GetXaxis()->SetLabelSize(recoOverGenM_VPt_p[jI][cI][jI2]->GetXaxis()->GetLabelSize()*1.4);
+	  recoOverGenM_VPt_p[jI][cI][jI2]->GetYaxis()->SetLabelSize(recoOverGenM_VPt_p[jI][cI][jI2]->GetYaxis()->GetLabelSize()*1.4);
+	  recoOverGenM_VPt_p[jI][cI][jI2]->GetXaxis()->SetTitleOffset(1.0);
+	  recoOverGenM_VPt_p[jI][cI][jI2]->GetYaxis()->SetTitleOffset(1.5);
+
+
+ 	  recoOverGenM_VPt_p[jI][cI][jI2]->SetMinimum(getMinGTZero(recoOverGenM_VPt_p[jI][cI][jI2])/2.);
+	  recoOverGenM_VPt_p[jI][cI][jI2]->DrawCopy("HIST E1");
+	
+	  gPad->SetLogy();
+
+	  /*
+	  std::string centLabel = centBinsStr[cI].substr(4, centBinsStr[cI].size()) + "%";
+	  centLabel.replace(centLabel.find("to"), 2, "-");
+	  centLabel = "#bf{#color[" + std::to_string(kRed) + "]{" + centLabel + "}}";
+	  if(globalStr.size() != 0) centLabel = centLabel + "; #bf{" + globalStr + "}";
+	
+	  std::string tempStr = jtAlgos[jI];
+	  if(algoNameSwaps.count(tempStr) != 0) tempStr = algoNameSwaps[jtAlgos[jI]];
+	  centLabel = tempStr + ", " + centLabel;
+	  
+	  label_p->SetTextSize(0.05);
+	  */
+	  std::vector<std::string> tempLabels; 
+	  std::string ptStr = prettyString(jtPtBins[jI2], 1, false) + "<p_{T,Jet}<" + prettyString(jtPtBins[jI2+1], 1, false);
+	  double xValLab = 0.25;
+	  double yValLab = 0.94;
+	  if(jI2 == 0){
+	    tempLabels = {centLabel};
+	    if(isStrSame(caloTrackStr, "Tower")) tempLabels.push_back("Calo. jets");
+            else if(isStrSame(caloTrackStr, "Trk")) tempLabels.push_back("Track jets");
+	    tempLabels.push_back(ptStr);
+	    tempLabels.push_back("|#eta_{jet}| < " + jtAbsEtaMaxStr);
+	    tempLabels.push_back("p_{T,Reco} > " + minJtPtStr);
+	  }
+	  else{
+	    tempLabels = {""};
+	    tempLabels.push_back("");
+	    tempLabels.push_back(ptStr);
+	  }
+
+	  label_p->SetTextSize(0.05);
+	  for(unsigned int i = 0; i < tempLabels.size(); ++i){
+	    label_p->SetText(xValLab, yValLab, tempLabels[i].c_str());
+
+	    double currSize = label_p->GetXsize();
+	    while(currSize < maxSize){tempLabels[i] = " " + tempLabels[i]; label_p->SetText(xValLab, yValLab, tempLabels[i].c_str()); currSize = label_p->GetXsize();}
+	    
+	    label_p->DrawLatex(xValLab, yValLab, tempLabels[i].c_str());
+	    yValLab -= 0.065;
+	  }
+	  /*
+	  if(jI2 == 0) label_p->DrawLatex(0.20, 0.95, centLabel.c_str());
+	  std::string ptStr = prettyString(jtPtBins[jI2], 1, false) + "<p_{T,Jet}<" + prettyString(jtPtBins[jI2+1], 1, false);
+	  label_p->DrawLatex(0.20, 0.83, ptStr.c_str());
+	  
+	  if(jI2 == 0){
+	    if(jtAbsEtaMaxStr.size() != 0) label_p->DrawLatex(0.20, 0.77, ("|#eta_{jet}| < " + jtAbsEtaMaxStr).c_str());
+	    if(minJtPtStr.size() != 0) label_p->DrawLatex(0.20, 0.71, ("p_{T,Reco} > " + minJtPtStr).c_str());
+	    if(isStrSame(caloTrackStr, "Tower")) label_p->DrawLatex(0.20, 0.89, "Calo. jets");
+	    else if(isStrSame(caloTrackStr, "Trk")) label_p->DrawLatex(0.20, 0.89, "Track jets");
+	  }
+	  */
+	  label_p->SetTextSize(globalSize);
+	}	 
+
+	std::string saveName = "pdfDir/" + dateStr + "/recoOverGenM_" + nameStr + "_" + dateStr + ".pdf";
+	quietSaveAs(canvFit_p, saveName);
+	delete canvFit_p;
+      }
+
+      plotResponseSet(fileConfig_p, inConfig_p, centHistMean, centBinsStr, "recoOverGenMean_" + globalStr + "_" + caloTrackStr, jtAlgos[jI], dateStr, "");
+      plotResponseSet(fileConfig_p, inConfig_p, centHistSigma, centBinsStr, "recoOverGenSigma_" + globalStr + "_" + caloTrackStr, jtAlgos[jI], dateStr, "");
+      plotResponseSet(fileConfig_p, inConfig_p, centHistSigmaOverMean, centBinsStr, "recoOverGenSigmaOverMean_" + globalStr + "_" + caloTrackStr, jtAlgos[jI], dateStr, "");
+      plotResponseSet(fileConfig_p, inConfig_p, centHistMMean, centBinsStr, "recoOverGenMMean_" + globalStr + "_" + caloTrackStr, jtAlgos[jI], dateStr, "");
+      plotResponseSet(fileConfig_p, inConfig_p, centHistMSigma, centBinsStr, "recoOverGenMSigma_" + globalStr + "_" + caloTrackStr, jtAlgos[jI], dateStr, "");
+
+      plotResponseSet(fileConfig_p, inConfig_p, centHistMOverPtMean, centBinsStr, "recoOverGenMOverPtMean_" + globalStr + "_" + caloTrackStr, jtAlgos[jI], dateStr, "");
+      plotResponseSet(fileConfig_p, inConfig_p, centHistMOverPtSigma, centBinsStr, "recoOverGenMOverPtSigma_" + globalStr + "_" + caloTrackStr, jtAlgos[jI], dateStr, "");
+
+      plotResponseSet(fileConfig_p, inConfig_p, centHistSigmaEta, centBinsStr, "recoGenSigma_DeltaEta_" + globalStr + "_" + caloTrackStr, jtAlgos[jI], dateStr, "");
+      plotResponseSet(fileConfig_p, inConfig_p, centHistSigmaPhi, centBinsStr, "recoGenSigma_DeltaPhi_" + globalStr + "_" + caloTrackStr, jtAlgos[jI], dateStr, "");
 
       centHistMean.clear();
       centHistSigma.clear();
@@ -1428,18 +1816,18 @@ int plotClusterHist(std::string inConfigFileName)
 	jtAlgosLabel.push_back(tempStr);
       }
 
-      plotResponseSet(fileConfig_p, inConfig_p, algoHistMean, jtAlgosLabel, "recoOverGenMean_" + globalStr + "_" + caloTrackStr, centBinsStr[cI], dateStr);
-      plotResponseSet(fileConfig_p, inConfig_p, algoHistSigma, jtAlgosLabel, "recoOverGenSigma_" + globalStr + "_" + caloTrackStr, centBinsStr[cI], dateStr);
-      plotResponseSet(fileConfig_p, inConfig_p, algoHistSigmaOverMean, jtAlgosLabel, "recoOverGenSigmaOverMean_" + globalStr + "_" + caloTrackStr, centBinsStr[cI], dateStr);
+      plotResponseSet(fileConfig_p, inConfig_p, algoHistMean, jtAlgosLabel, "recoOverGenMean_" + globalStr + "_" + caloTrackStr, centBinsStr[cI], dateStr, "");
+      plotResponseSet(fileConfig_p, inConfig_p, algoHistSigma, jtAlgosLabel, "recoOverGenSigma_" + globalStr + "_" + caloTrackStr, centBinsStr[cI], dateStr, "");
+      plotResponseSet(fileConfig_p, inConfig_p, algoHistSigmaOverMean, jtAlgosLabel, "recoOverGenSigmaOverMean_" + globalStr + "_" + caloTrackStr, centBinsStr[cI], dateStr, "");
 
-      plotResponseSet(fileConfig_p, inConfig_p, algoHistMMean, jtAlgosLabel, "recoOverGenMMean_" + globalStr + "_" + caloTrackStr, centBinsStr[cI], dateStr);
-      plotResponseSet(fileConfig_p, inConfig_p, algoHistMSigma, jtAlgosLabel, "recoOverGenMSigma_" + globalStr + "_" + caloTrackStr, centBinsStr[cI], dateStr);
+      plotResponseSet(fileConfig_p, inConfig_p, algoHistMMean, jtAlgosLabel, "recoOverGenMMean_" + globalStr + "_" + caloTrackStr, centBinsStr[cI], dateStr, "");
+      plotResponseSet(fileConfig_p, inConfig_p, algoHistMSigma, jtAlgosLabel, "recoOverGenMSigma_" + globalStr + "_" + caloTrackStr, centBinsStr[cI], dateStr, "");
 
-      plotResponseSet(fileConfig_p, inConfig_p, algoHistMOverPtMean, jtAlgosLabel, "recoOverGenMOverPtMean_" + globalStr + "_" + caloTrackStr, centBinsStr[cI], dateStr);
-      plotResponseSet(fileConfig_p, inConfig_p, algoHistMOverPtSigma, jtAlgosLabel, "recoOverGenMOverPtSigma_" + globalStr + "_" + caloTrackStr, centBinsStr[cI], dateStr);
+      plotResponseSet(fileConfig_p, inConfig_p, algoHistMOverPtMean, jtAlgosLabel, "recoOverGenMOverPtMean_" + globalStr + "_" + caloTrackStr, centBinsStr[cI], dateStr, "");
+      plotResponseSet(fileConfig_p, inConfig_p, algoHistMOverPtSigma, jtAlgosLabel, "recoOverGenMOverPtSigma_" + globalStr + "_" + caloTrackStr, centBinsStr[cI], dateStr, "");
 
-      plotResponseSet(fileConfig_p, inConfig_p, algoHistSigmaEta, jtAlgosLabel, "recoGenSigma_DeltaEta_" + globalStr + "_" + caloTrackStr, centBinsStr[cI], dateStr);
-      plotResponseSet(fileConfig_p, inConfig_p, algoHistSigmaPhi, jtAlgosLabel, "recoGenSigma_DeltaPhi_" + globalStr + "_" + caloTrackStr, centBinsStr[cI], dateStr);
+      plotResponseSet(fileConfig_p, inConfig_p, algoHistSigmaEta, jtAlgosLabel, "recoGenSigma_DeltaEta_" + globalStr + "_" + caloTrackStr, centBinsStr[cI], dateStr, "");
+      plotResponseSet(fileConfig_p, inConfig_p, algoHistSigmaPhi, jtAlgosLabel, "recoGenSigma_DeltaPhi_" + globalStr + "_" + caloTrackStr, centBinsStr[cI], dateStr, "");
 
       algoHistMean.clear();
       algoHistSigma.clear();

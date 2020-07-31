@@ -16,6 +16,7 @@
 //Local
 #include "include/checkMakeDir.h"
 #include "include/etaPhiFunc.h"
+#include "include/getLinBins.h"
 #include "include/getLogBins.h"
 #include "include/globalDebugHandler.h"
 #include "include/histDefUtility.h"
@@ -36,7 +37,14 @@ int makeClusterHist(std::string inConfigFileName)
   TEnv* inConfig_p = new TEnv(inConfigFileName.c_str());
   std::vector<std::string> reqParams = {"INFILENAME",
 					"DOJZWEIGHTS",
-					"DOCENTWEIGHTS"};
+					"DOCENTWEIGHTS",
+					"NCENTBINS",
+					"CENTBINS",
+					"NJTPTBINS",
+					"JTPTBINSLOW",
+					"JTPTBINSHIGH",
+					"JTPTBINSLIN",
+					"JTPTBINSLOG"};
 
   if(!checkConfigContainsParams(inConfig_p, reqParams)) return 1;
 
@@ -167,18 +175,30 @@ int makeClusterHist(std::string inConfigFileName)
 
   if(doDebug) std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
   
+
+  std::string globalTag = inConfig_p->GetValue("GLOBALTAG", "");
+
   std::string outFileName = inFileName.substr(0, inFileName.find(".root"));
+  if(globalTag.size() != 0) outFileName = outFileName + "_" + globalTag;
   while(outFileName.find("/") != std::string::npos){outFileName.replace(0, outFileName.find("/")+1, "");}
   outFileName = "output/" + dateStr + "/" + outFileName + "_HIST_" + dateStr + ".root";
 
   //Re-worked binning - don't want to go above 90 because of lack of stats  
   const Int_t nMaxCentBins = 10;
-  const Int_t nCentBins = 7;
-  const Int_t centBinsLow[nMaxCentBins] = {0, 10, 20, 30, 40, 50, 70};
-  const Int_t centBinsHigh[nMaxCentBins] = {10, 20, 30, 40, 50, 70, 90};
+  const Int_t nCentBins = inConfig_p->GetValue("NCENTBINS", 10);
+  std::vector<Int_t> centBins = strToVectI(inConfig_p->GetValue("CENTBINS", ""));
+  if(nCentBins != (Int_t)centBins.size()-1){
+    std::cout << "GIVEN NCENTBINS \'" << nCentBins << "\' DOES NOT MATCH CENTBINS SIZE \'" << centBins.size()-1<< "\'. return 1" << std::endl;
+    return 1;
+  }
+
+  Int_t centBinsLow[nMaxCentBins];
+  Int_t centBinsHigh[nMaxCentBins];
   Int_t nEventPerCent[nMaxCentBins];
   std::vector<std::string> centBinsStr;
   for(Int_t cI = 0; cI < nCentBins; ++cI){
+    centBinsLow[cI] = centBins[cI];
+    centBinsHigh[cI] = centBins[cI+1];
     centBinsStr.push_back("Cent" + std::to_string(centBinsLow[cI]) + "to" + std::to_string(centBinsHigh[cI]));
     nEventPerCent[cI] = 0;
   }
@@ -187,11 +207,21 @@ int makeClusterHist(std::string inConfigFileName)
 
   const Float_t maxJtAbsEta = 2.4;
   
-  const Int_t nJtPtBins = 12;
-  Float_t jtPtLow = 20;
-  Float_t jtPtHigh = 400;
-  Double_t jtPtBins[nJtPtBins+1];
-  getLogBins(jtPtLow, jtPtHigh, nJtPtBins, jtPtBins);
+  const Int_t nMaxJtPtBins = 50;
+  const Int_t nJtPtBins = inConfig_p->GetValue("NJTPTBINS", 10); 
+  const Float_t jtPtLow = inConfig_p->GetValue("JTPTBINSLOW", 20.);
+  const Float_t jtPtHigh = inConfig_p->GetValue("JTPTBINSHIGH", 100.);
+  const Bool_t jtPtDoLin = inConfig_p->GetValue("JTPTBINSLIN", 0);
+  const Bool_t jtPtDoLog = inConfig_p->GetValue("JTPTBINSLOG", 0);
+
+  if(jtPtDoLin == false && jtPtDoLog == false){
+    std::cout << "Must select jtPtDoLog or jtPtDoLin. return 1" << std::endl;
+    return 1;
+  }
+
+  Double_t jtPtBins[nMaxJtPtBins+1];
+  if(jtPtDoLog) getLogBins(jtPtLow, jtPtHigh, nJtPtBins, jtPtBins);
+  if(jtPtDoLin) getLinBins(jtPtLow, jtPtHigh, nJtPtBins, jtPtBins);
   std::vector<std::string> jtPtBinsStrVect;
 
   if(doDebug) std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
@@ -200,18 +230,19 @@ int makeClusterHist(std::string inConfigFileName)
   TH1D* cent_p = new TH1D("cent_h", ";Centrality (%);Weighted Counts", 100, -0.5, 99.5);
   TH1D* cent_CentWeightOnly_p = new TH1D("cent_CentWeightOnly_h", ";Centrality (%);Weighted Counts", 100, -0.5, 99.5);
   TH1D* cent_Unweighted_p = new TH1D("cent_Unweighted_h", ";Centrality (%);Unweighted Counts", 100, -0.5, 99.5);
-  centerTitles({cent_p, cent_CentWeightOnly_p, cent_Unweighted_p});
+  TH1D* cent_FullUnweighted_p = new TH1D("cent_FullUnweighted_h", ";Centrality (%);Unweighted Counts", 100, -0.5, 99.5);
+  centerTitles({cent_p, cent_CentWeightOnly_p, cent_Unweighted_p, cent_FullUnweighted_p});
 
   TH1D* spectra_p[nMaxJtAlgo+1][nMaxCentBins];
   TH1D* spectraUnmatched_p[nMaxJtAlgo][nMaxCentBins];
   TH1D* spectraChg_p[nMaxCentBins];
   TH1D* matchedTruthSpectra_p[nMaxJtAlgo][nMaxCentBins];
   TH1D* spectra_Unweighted_p[nMaxCentBins];
-  TH1D* recoOverGen_VPt_p[nMaxJtAlgo][nMaxCentBins][nJtPtBins];
-  TH1D* recoOverGenM_VPt_p[nMaxJtAlgo][nMaxCentBins][nJtPtBins];
-  TH1D* recoOverGenMOverPt_VPt_p[nMaxJtAlgo][nMaxCentBins][nJtPtBins];
-  TH1D* recoGen_DeltaEta_p[nMaxJtAlgo][nMaxCentBins][nJtPtBins];
-  TH1D* recoGen_DeltaPhi_p[nMaxJtAlgo][nMaxCentBins][nJtPtBins];
+  TH1D* recoOverGen_VPt_p[nMaxJtAlgo][nMaxCentBins][nMaxJtPtBins];
+  TH1D* recoOverGenM_VPt_p[nMaxJtAlgo][nMaxCentBins][nMaxJtPtBins];
+  TH1D* recoOverGenMOverPt_VPt_p[nMaxJtAlgo][nMaxCentBins][nMaxJtPtBins];
+  TH1D* recoGen_DeltaEta_p[nMaxJtAlgo][nMaxCentBins][nMaxJtPtBins];
+  TH1D* recoGen_DeltaPhi_p[nMaxJtAlgo][nMaxCentBins][nMaxJtPtBins];
   
   for(Int_t jI = 0; jI < nJtAlgo+1; ++jI){
     std::string algo = "Truth";
@@ -377,7 +408,8 @@ int makeClusterHist(std::string inConfigFileName)
 
     if(doDebug) std::cout << "FILE, LINE: " << __FILE__ << ", " << __LINE__ << std::endl;
 
-    if(cent_ > 98.1) continue;
+    cent_FullUnweighted_p->Fill(cent_);
+
 
     Int_t centPos = -1;
     for(Int_t cI = 0; cI < nCentBins; ++cI){
@@ -417,8 +449,6 @@ int makeClusterHist(std::string inConfigFileName)
       centWeight = centWeightMap[centInt_]/centCounter[centInt_];
       weight *= centWeight;
     }
-
-    if(entry == 804801) std::cout << "JZ WEIGHT, CENT WEIGHT: " << weight/centWeight << ", " << centWeight << std::endl;
 
     cent_p->Fill(cent_, weight);
     cent_CentWeightOnly_p->Fill(cent_, centWeight);
@@ -573,6 +603,9 @@ int makeClusterHist(std::string inConfigFileName)
 
   cent_Unweighted_p->Write("", TObject::kOverwrite);
   delete cent_Unweighted_p;
+
+  cent_FullUnweighted_p->Write("", TObject::kOverwrite);
+  delete cent_FullUnweighted_p;
 
   for(Int_t aI = 0; aI < nJtAlgo+1; ++aI){
     if(!isMC && aI == nJtAlgo) break;

@@ -12,12 +12,12 @@
 
 int testSegmentArea()
 {
-  const double circleEta = 0.1;
+  const double circleEta = -1.55288;
   const double circlePhi = 1.0;
   const double circleR = 0.4;
 
-  const double eta1 = 0.5;
-  const double eta2 = 0.55;
+  const double eta1 = -1.55;
+  const double eta2 = -1.55 + 0.4;
 
   TRandom3* randGen_p = new TRandom3(0);
 
@@ -29,9 +29,12 @@ int testSegmentArea()
       const double deltaEta1 = std::fabs(eta1 - circleEta);
       const double theta1 = std::acos(deltaEta1/circleR);
       
+      std::cout << "DETA 1: " << deltaEta1 << std::endl;
+
       double area = theta1*circleR*circleR - deltaEta1*circleR*std::sin(theta1);
       
       const double deltaEta2 = std::fabs(eta2 - circleEta);
+      std::cout << "DETA 2: " << deltaEta2 << std::endl;
       if(circleR > deltaEta2){
 	const double theta2 = std::acos(deltaEta2/circleR);
 	
